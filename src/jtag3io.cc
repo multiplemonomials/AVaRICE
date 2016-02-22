@@ -119,26 +119,79 @@ jtag3::~jtag3(void)
  */
 void jtag3::sendFrame(uchar *command, int commandSize)
 {
-    unsigned char *buf = new unsigned char[commandSize + 4];
+    if (is_edbg && commandSize + 8 > 512)
+        throw jtag_exception("jtag3::sendFrame(): commandSize too large");
 
-    buf[0] = TOKEN;
-    buf[1] = 0;
-    u16_to_b2(buf + 2, command_sequence);
-    memcpy(buf + 4, command, commandSize);
+    const size_t bsize = is_edbg? 512: (commandSize + 4);
+    unsigned char *buf = new unsigned char[bsize];
 
-    for (int i = 0; i < commandSize + 4; i++)
+    if (is_edbg)
+    {
+        buf[0] = EDBG_VENDOR_AVR_CMD;
+        buf[1] = (1 << 4) | 1;	/* first out of a total of 1 fragments */
+        buf[2] = (commandSize + 4) >> 8;
+        buf[3] = (commandSize + 4) & 0xff;
+        buf[4] = TOKEN;
+        buf[5] = 0;                   /* dummy */
+        u16_to_b2(buf + 6, command_sequence);
+        memcpy(buf + 8, command, commandSize);
+    }
+    else
+    {
+        buf[0] = TOKEN;
+        buf[1] = 0;
+        u16_to_b2(buf + 2, command_sequence);
+        memcpy(buf + 4, command, commandSize);
+    }
+
+    for (int i = 0; i < commandSize + (is_edbg? 8: 4); i++)
 	debugOut("%.2X ", buf[i]);
     debugOut("\n");
 
-    int count = safewrite(buf, commandSize + 4);
+    int count = safewrite(buf, bsize);
 
     delete [] buf;
 
     if (count < 0)
         throw jtag_exception();
-    else if (count != commandSize + 4)
+    else if (count != bsize)
         // this shouldn't happen
         throw jtag_exception("Invalid write size");
+
+    if (!is_edbg)
+        return;
+
+    uchar tempbuf[512];
+    int amnt;
+    int rv;
+    rv = timeout_read((void *)&amnt, sizeof amnt, JTAG_RESPONSE_TIMEOUT);
+    if (rv == 0)
+    {
+        /* timeout */
+        debugOut("read() timed out\n");
+
+        return;
+    }
+    else if (rv < 0)
+    {
+        /* error */
+        debugOut("read() error %d\n", rv);
+        throw jtag_exception("read error");
+    }
+    if (amnt <= 0 || amnt > MAX_MESSAGE_SIZE_JTAGICE3)
+    {
+        debugOut("unexpected message size from pipe: %d\n", amnt);
+        return;
+    }
+
+    rv = timeout_read(tempbuf, amnt, JTAG3_PIPE_TIMEOUT);
+    if (rv > 0)
+    {
+        if (tempbuf[0] != EDBG_VENDOR_AVR_CMD ||
+            tempbuf[1] != 0x01)
+            debugOut("unexpected response to CMSIS-DAP AVR CMD (0x%02x, 0x%02x)\n",
+                     tempbuf[0], tempbuf[1]);
+    }
 }
 
 /*
@@ -155,6 +208,20 @@ int jtag3::recvFrame(unsigned char *&msg, unsigned short &seqno)
   int rv, l;
 
   msg = NULL;
+
+  if (is_edbg)
+  {
+      const int bsize = 512;
+      unsigned char buf[bsize];
+      buf[0] = EDBG_VENDOR_AVR_RSP;
+
+      int count = safewrite(buf, bsize);
+      if (count < 0)
+          throw jtag_exception();
+      else if (count != bsize)
+          // this shouldn't happen
+          throw jtag_exception("Invalid write size");
+  }
 
   int amnt;
   rv = timeout_read((void *)&amnt, sizeof amnt, JTAG_RESPONSE_TIMEOUT);

@@ -62,6 +62,7 @@
 #define USB_DEVICE_JTAGICEMKII 0x2103
 #define USB_DEVICE_AVRDRAGON   0x2107
 #define USB_DEVICE_JTAGICE3    0x2110
+#define USB_DEVICE_EDBG        0x2111
 
 /* JTAGICEmkII */
 #define USBDEV_BULK_EP_WRITE_MKII 0x02
@@ -74,6 +75,11 @@
 #define USBDEV_EVT_EP_READ_3      0x83
 #define USBDEV_MAX_XFER_3    512
 #define USBDEV_MAX_EVT_3     64
+
+/* EDBG (JTAGICE3 3.x, Atmel-ICE, Integrated EDBG */
+#define USBDEV_INTERRUPT_EP_WRITE_EDBG 0x01
+#define USBDEV_INTERRUPT_EP_READ_EDBG  0X82
+#define USBDEV_MAX_XFER_EDBG 512
 
 #define MAX_MESSAGE      512
 
@@ -93,10 +99,13 @@ static struct libusb20_backend *be;
 static struct libusb20_transfer *xfr_out;
 static struct libusb20_transfer *xfr_in;
 static struct libusb20_transfer *xfr_evt;
+static struct LIBUSB20_CONTROL_SETUP_DECODED setup;
 #else
 static pthread_t rtid, wtid, etid;
 #endif
 static int usb_interface;
+static int flags;
+#define FL_USB_EDBG 0x0001
 
 #ifdef HAVE_LIBUSB_2_0
 /* convert LIBUSB20_ERROR into textual description */
@@ -253,6 +262,7 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
     case EMULATOR_DRAGON:
       pid = USB_DEVICE_AVRDRAGON;
       read_ep = USBDEV_BULK_EP_READ_MKII;
+
       write_ep = USBDEV_BULK_EP_WRITE_MKII;
       event_ep = 0;
       max_xfer = USBDEV_MAX_XFER_MKII;
@@ -264,6 +274,15 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
       write_ep = USBDEV_BULK_EP_WRITE_3;
       event_ep = USBDEV_EVT_EP_READ_3;
       max_xfer = USBDEV_MAX_XFER_3;
+      break;
+
+    case EMULATOR_EDBG:
+      pid = USB_DEVICE_EDBG;
+      read_ep = USBDEV_INTERRUPT_EP_READ_EDBG;
+      write_ep = USBDEV_INTERRUPT_EP_WRITE_EDBG;
+      event_ep = 0;
+      max_xfer = USBDEV_MAX_XFER_EDBG;
+      flags |= FL_USB_EDBG;
       break;
 
     default:
@@ -483,6 +502,7 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
 		max_xfer, max_packet_l, read_ep);
       max_xfer = max_packet_l;
     }
+  LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &setup);
   if (event_ep != 0 &&
       (rv = libusb20_tr_open(xfr_evt, 0, 1, event_ep)) != 0)
     {
@@ -503,9 +523,19 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
       statusOut("error setting configuration %d: %s\n",
                 dev->config[0].bConfigurationValue,
                 usb_strerror());
-      goto fail;
+      //let's hope interface has already been configured
+      //goto fail;
   }
   usb_interface = dev->config[0].interface[0].altsetting[0].bInterfaceNumber;
+#ifdef LIBUSB_HAS_GET_DRIVER_NP
+  /*
+   * Many Linux systems attach the usbhid driver
+   * by default to any HID-class device.  On
+   * those, the driver needs to be detached before
+   * we can claim the interface.
+   */
+  (void)usb_detach_kernel_driver_np(pdev, usb_interface);
+#endif
   if (usb_claim_interface(pdev, usb_interface))
   {
       statusOut("error claiming interface %d: %s\n",
@@ -551,6 +581,24 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
       return NULL;
     }
 
+  if (flags & FL_USB_EDBG)
+  {
+#ifdef HAVE_LIBUSB_2_0
+    setup.bmRequestType = 0x21;
+    setup.bRequest = 0x0a; /* SET_IDLE */
+    setup.wValue = 0;
+    setup.wIndex = 0;
+    setup.wLength = 0;
+    uint16_t actlen;
+    rv = libusb20_dev_request_sync(pdev, &setup, NULL, &actlen, 100, 0 /* flags */);
+    if (rv != 0)
+      fprintf(stderr, "SET_IDLE failed: %s\n", usb_error(rv));
+#else
+    if (usb_control_msg(pdev, 0x21, 0x0a /* SET_IDLE */, 0, 0, NULL, 0, 100) < 0)
+      statusOut("SET_IDLE failed\n");
+#endif
+  }
+
   return pdev;
 }
 
@@ -577,7 +625,11 @@ static void *usb_thread(void * data)
       if (!libusb20_tr_pending(xfr_in))
 	{
 	  // setup and start new bulk IN transfer
-	  libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
+	  if (flags & FL_USB_EDBG)
+	    libusb20_tr_setup_intr(xfr_in, rbuf + sizeof(unsigned int),
+				   max_xfer, 0);
+	  else
+	    libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
 				 max_xfer, 0);
 	  libusb20_tr_start(xfr_in);
 	}
@@ -660,8 +712,12 @@ static void *usb_thread(void * data)
 		  offset += amnt;
 		}
 
-	      libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
-				     max_xfer, 0);
+	      if (flags & FL_USB_EDBG)
+		libusb20_tr_setup_intr(xfr_in, rbuf + sizeof(unsigned int),
+				       max_xfer, 0);
+	      else
+		libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
+				       max_xfer, 0);
 	      libusb20_tr_start(xfr_in);
 	    }
 	  else if (errno != EINTR && errno != EAGAIN)
@@ -832,8 +888,12 @@ static void *usb_thread_write(void * data)
 	      amnt = max_xfer;
 	    else
 	      amnt = rv;
-	    result = usb_bulk_write(udev, write_ep,
-				    buf + offset, amnt, 5000);
+	    if (flags & FL_USB_EDBG)
+		result = usb_interrupt_write(udev, write_ep,
+					     buf + offset, amnt, 5000);
+	    else
+		result = usb_bulk_write(udev, write_ep,
+					buf + offset, amnt, 5000);
 	    if (result != amnt)
 	    {
 	      fprintf(stderr, "USB bulk write error: %s\n",
@@ -867,8 +927,12 @@ static void *usb_thread_read(void *data)
       char buf[MAX_MESSAGE + sizeof(unsigned int)];
       int rv;
 
-      rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int),
-			 max_xfer, 0);
+      if (flags & FL_USB_EDBG)
+	  rv = usb_interrupt_read(udev, read_ep, buf + sizeof(unsigned int),
+				  max_xfer, 0);
+      else
+	  rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int),
+			     max_xfer, 0);
       if (rv == 0 || rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
       {
 	/* OK, try again */
