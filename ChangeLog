@@ -1,3 +1,7 @@
+2016-02-22 Joerg Wunsch <j.gnu@uriah.heep.sax.de>
+
+	* configure.ac: Add hooks for libhidapi
+
 2015-06-24 Joerg Wunsch <j.gnu@uriah.heep.sax.de>
 
 	Submitted by Uwe Frank <frank@drello.de>
