@@ -50,6 +50,10 @@
 #  include <usb.h>
 #endif
 
+#ifdef HAVE_LIBHIDAPI
+#  include <hidapi/hidapi.h>
+#endif
+
 #include <pthread.h>
 
 #ifdef __FreeBSD__
@@ -91,6 +95,9 @@ typedef usb_dev_handle usb_dev_t;
 #endif
 
 static usb_dev_t *udev = NULL;
+#ifdef HAVE_LIBHIDAPI
+static hid_device *hdev = NULL;
+#endif
 static int pype[2];
 
 #ifdef HAVE_LIBUSB_2_0
@@ -602,6 +609,105 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
   return pdev;
 }
 
+#ifdef HAVE_LIBHIDAPI
+/*
+ * Open HID, used for CMSIS-DAP (EDBG) devices
+ */
+static hid_device *openhid(const char *jtagDeviceName)
+{
+  char string[256];
+  hid_device *pdev;
+  char *devnamecopy, *serno, *cp2;
+  size_t x;
+  wchar_t wserno[15];
+  size_t serlen = 0;
+
+  devnamecopy = new char[x = strlen(jtagDeviceName) + 1];
+  memcpy(devnamecopy, jtagDeviceName, x);
+
+  /*
+   * The syntax for usb devices is defined as:
+   *
+   * -P usb[:serialnumber]
+   *
+   * See if we've got a serial number passed here.  The serial number
+   * might contain colons which we remove below, and we compare it
+   * right-to-left, so only the least significant nibbles need to be
+   * specified.
+   */
+  if ((serno = strchr(devnamecopy, ':')) != NULL)
+    {
+      /* first, drop all colons there if any */
+      cp2 = ++serno;
+
+      while ((cp2 = strchr(cp2, ':')) != NULL)
+	{
+	  x = strlen(cp2) - 1;
+	  memmove(cp2, cp2 + 1, x);
+	  cp2[x] = '\0';
+	}
+
+      serlen = strlen(serno);
+      if (serlen > 12)
+      {
+	  fprintf(stderr, "invalid serial number \"%s\"", serno);
+	  delete [] devnamecopy;
+	  return NULL;
+      }
+      mbstowcs(wserno, serno, 15);
+    }
+  delete [] devnamecopy;
+
+  pdev = NULL;
+
+  /*
+   * Find any Atmel device which is a HID.  Then, look at the product
+   * string whether it contains the mandatory substring "CMSIS-DAP".
+   * (This distinguishes the ICEs from e.g. a keyboard or mouse demo
+   * using the Atmel VID.)
+   *
+   * If a serial number has been asked for, try to match it as well.
+   */
+  struct hid_device_info *list, *walk;
+  list = hid_enumerate(USB_VENDOR_ATMEL, 0);
+  if (list == NULL)
+    return NULL;
+
+  walk = list;
+  while (walk)
+    {
+      if (wcsstr(walk->product_string, L"CMSIS-DAP") != NULL)
+	{
+	  // Atmel CMSID-DAP device found
+	  // If no serial number requested, we are done.
+	  if (serlen == 0)
+	    break;
+	  // Otherwise, match the serial number
+	  if (wcscmp(walk->serial_number + serlen, wserno) == 0)
+	    {
+	      // found matching serial number
+	      break;
+	    }
+	  // else: proceed to next device
+	}
+      walk = walk->next;
+    }
+  if (walk == NULL)
+    {
+      hid_free_enumeration(list);
+      return NULL;
+    }
+
+  pdev = hid_open_path(walk->path);
+  hid_free_enumeration(list);
+  if (pdev == NULL)
+    // can't happen?
+    return NULL;
+
+  return pdev;
+}
+#endif	// HAVE_LIBHIDAPI
+
 #ifdef HAVE_LIBUSB_2_0
 /* USB thread */
 static void *usb_thread(void * data)
@@ -1100,29 +1206,42 @@ void jtag::openUSB(const char *jtagDeviceName)
   if (socketpair(AF_UNIX, SOCK_STREAM, PF_UNSPEC, pype) < 0)
       throw jtag_exception("cannot create pipe");
 
-  udev = opendev(jtagDeviceName, emu_type, usb_interface);
-  if (udev == NULL)
-    throw jtag_exception("cannot open USB device");
+  if (emu_type == EMULATOR_EDBG)
+    {
+#ifdef HAVE_LIBHIDAPI
+      hdev = openhid(jtagDeviceName);
+      if (hdev == NULL)
+	throw jtag_exception("cannot open HID");
+#else  // !HAVE_LIBHIDAPI
+      throw jtag_exception("EDBG/CMSIS-DAP devices require libhidapi support");
+#endif
+    }
+  else
+    {
+      udev = opendev(jtagDeviceName, emu_type, usb_interface);
+      if (udev == NULL)
+	throw jtag_exception("cannot open USB device");
 
 #ifdef HAVE_LIBUSB_2_0
-  pthread_create(&utid, NULL, usb_thread, NULL);
+      pthread_create(&utid, NULL, usb_thread, NULL);
 #  ifdef __FreeBSD__
-  pthread_set_name_np(utid, "USB thread");
+      pthread_set_name_np(utid, "USB thread");
 #  endif
 #else
-  pthread_create(&rtid, NULL, usb_thread_read, NULL);
-  pthread_create(&wtid, NULL, usb_thread_write, NULL);
-  if (event_ep != 0)
-    pthread_create(&etid, NULL, usb_thread_event, NULL);
+      pthread_create(&rtid, NULL, usb_thread_read, NULL);
+      pthread_create(&wtid, NULL, usb_thread_write, NULL);
+      if (event_ep != 0)
+	pthread_create(&etid, NULL, usb_thread_event, NULL);
 #  ifdef __FreeBSD__
-  pthread_set_name_np(rtid, "USB reader thread");
-  pthread_set_name_np(wtid, "USB writer thread");
-  if (event_ep != 0)
-    pthread_set_name_np(etid, "USB event thread");
+      pthread_set_name_np(rtid, "USB reader thread");
+      pthread_set_name_np(wtid, "USB writer thread");
+      if (event_ep != 0)
+	pthread_set_name_np(etid, "USB event thread");
 #  endif
 #endif
 
-  atexit(cleanup_usb);
+      atexit(cleanup_usb);
+    }
 
   jtagBox = pype[1];
 }
