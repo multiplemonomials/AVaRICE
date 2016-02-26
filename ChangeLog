@@ -1,3 +1,7 @@
+2016-02-26 Joerg Wunsch <j.gnu@uriah.heep.sax.de>
+
+	* src/jtag2usb.cc: Implement libhidapi support for EDBG-based ICEs
+
 2016-02-22 Joerg Wunsch <j.gnu@uriah.heep.sax.de>
 
 	* configure.ac: Add hooks for libhidapi

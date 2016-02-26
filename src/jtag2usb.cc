@@ -51,6 +51,7 @@
 #endif
 
 #ifdef HAVE_LIBHIDAPI
+#  include <poll.h>
 #  include <hidapi/hidapi.h>
 #endif
 
@@ -87,6 +88,13 @@
 
 #define MAX_MESSAGE      512
 
+#ifdef HAVE_LIBHIDAPI
+struct hid_thread_data
+{
+  unsigned int max_pkt_size;
+};
+#endif
+
 static int read_ep, write_ep, event_ep, max_xfer;
 #ifdef HAVE_LIBUSB_2_0
 typedef struct libusb20_device usb_dev_t;
@@ -97,6 +105,7 @@ typedef usb_dev_handle usb_dev_t;
 static usb_dev_t *udev = NULL;
 #ifdef HAVE_LIBHIDAPI
 static hid_device *hdev = NULL;
+static pthread_t htid;
 #endif
 static int pype[2];
 
@@ -106,13 +115,10 @@ static struct libusb20_backend *be;
 static struct libusb20_transfer *xfr_out;
 static struct libusb20_transfer *xfr_in;
 static struct libusb20_transfer *xfr_evt;
-static struct LIBUSB20_CONTROL_SETUP_DECODED setup;
 #else
 static pthread_t rtid, wtid, etid;
 #endif
 static int usb_interface;
-static int flags;
-#define FL_USB_EDBG 0x0001
 
 #ifdef HAVE_LIBUSB_2_0
 /* convert LIBUSB20_ERROR into textual description */
@@ -269,7 +275,6 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
     case EMULATOR_DRAGON:
       pid = USB_DEVICE_AVRDRAGON;
       read_ep = USBDEV_BULK_EP_READ_MKII;
-
       write_ep = USBDEV_BULK_EP_WRITE_MKII;
       event_ep = 0;
       max_xfer = USBDEV_MAX_XFER_MKII;
@@ -281,15 +286,6 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
       write_ep = USBDEV_BULK_EP_WRITE_3;
       event_ep = USBDEV_EVT_EP_READ_3;
       max_xfer = USBDEV_MAX_XFER_3;
-      break;
-
-    case EMULATOR_EDBG:
-      pid = USB_DEVICE_EDBG;
-      read_ep = USBDEV_INTERRUPT_EP_READ_EDBG;
-      write_ep = USBDEV_INTERRUPT_EP_WRITE_EDBG;
-      event_ep = 0;
-      max_xfer = USBDEV_MAX_XFER_EDBG;
-      flags |= FL_USB_EDBG;
       break;
 
     default:
@@ -509,7 +505,6 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
 		max_xfer, max_packet_l, read_ep);
       max_xfer = max_packet_l;
     }
-  LIBUSB20_INIT(LIBUSB20_CONTROL_SETUP, &setup);
   if (event_ep != 0 &&
       (rv = libusb20_tr_open(xfr_evt, 0, 1, event_ep)) != 0)
     {
@@ -530,19 +525,9 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
       statusOut("error setting configuration %d: %s\n",
                 dev->config[0].bConfigurationValue,
                 usb_strerror());
-      //let's hope interface has already been configured
-      //goto fail;
+      goto fail;
   }
   usb_interface = dev->config[0].interface[0].altsetting[0].bInterfaceNumber;
-#ifdef LIBUSB_HAS_GET_DRIVER_NP
-  /*
-   * Many Linux systems attach the usbhid driver
-   * by default to any HID-class device.  On
-   * those, the driver needs to be detached before
-   * we can claim the interface.
-   */
-  (void)usb_detach_kernel_driver_np(pdev, usb_interface);
-#endif
   if (usb_claim_interface(pdev, usb_interface))
   {
       statusOut("error claiming interface %d: %s\n",
@@ -587,24 +572,6 @@ static usb_dev_t *opendev(const char *jtagDeviceName, emulator emu_type,
 #endif
       return NULL;
     }
-
-  if (flags & FL_USB_EDBG)
-  {
-#ifdef HAVE_LIBUSB_2_0
-    setup.bmRequestType = 0x21;
-    setup.bRequest = 0x0a; /* SET_IDLE */
-    setup.wValue = 0;
-    setup.wIndex = 0;
-    setup.wLength = 0;
-    uint16_t actlen;
-    rv = libusb20_dev_request_sync(pdev, &setup, NULL, &actlen, 100, 0 /* flags */);
-    if (rv != 0)
-      fprintf(stderr, "SET_IDLE failed: %s\n", usb_error(rv));
-#else
-    if (usb_control_msg(pdev, 0x21, 0x0a /* SET_IDLE */, 0, 0, NULL, 0, 100) < 0)
-      statusOut("SET_IDLE failed\n");
-#endif
-  }
 
   return pdev;
 }
@@ -678,6 +645,9 @@ static hid_device *openhid(const char *jtagDeviceName)
     {
       if (wcsstr(walk->product_string, L"CMSIS-DAP") != NULL)
 	{
+	  debugOut("Found HID PID:VID 0x%04x:0x%04x, serno %ls\n",
+		   walk->vendor_id, walk->product_id,
+		   walk->serial_number);
 	  // Atmel CMSID-DAP device found
 	  // If no serial number requested, we are done.
 	  if (serlen == 0)
@@ -686,6 +656,7 @@ static hid_device *openhid(const char *jtagDeviceName)
 	  if (wcscmp(walk->serial_number + serlen, wserno) == 0)
 	    {
 	      // found matching serial number
+	      debugOut("...matched\n");
 	      break;
 	    }
 	  // else: proceed to next device
@@ -694,6 +665,7 @@ static hid_device *openhid(const char *jtagDeviceName)
     }
   if (walk == NULL)
     {
+      fprintf(stderr, "No (matching) HID found\n");
       hid_free_enumeration(list);
       return NULL;
     }
@@ -703,6 +675,8 @@ static hid_device *openhid(const char *jtagDeviceName)
   if (pdev == NULL)
     // can't happen?
     return NULL;
+
+  hid_set_nonblocking(pdev, 1);
 
   return pdev;
 }
@@ -731,11 +705,7 @@ static void *usb_thread(void * data)
       if (!libusb20_tr_pending(xfr_in))
 	{
 	  // setup and start new bulk IN transfer
-	  if (flags & FL_USB_EDBG)
-	    libusb20_tr_setup_intr(xfr_in, rbuf + sizeof(unsigned int),
-				   max_xfer, 0);
-	  else
-	    libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
+	  libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
 				 max_xfer, 0);
 	  libusb20_tr_start(xfr_in);
 	}
@@ -818,12 +788,8 @@ static void *usb_thread(void * data)
 		  offset += amnt;
 		}
 
-	      if (flags & FL_USB_EDBG)
-		libusb20_tr_setup_intr(xfr_in, rbuf + sizeof(unsigned int),
-				       max_xfer, 0);
-	      else
-		libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
-				       max_xfer, 0);
+	      libusb20_tr_setup_bulk(xfr_in, rbuf + sizeof(unsigned int),
+				     max_xfer, 0);
 	      libusb20_tr_start(xfr_in);
 	    }
 	  else if (errno != EINTR && errno != EAGAIN)
@@ -994,12 +960,8 @@ static void *usb_thread_write(void * data)
 	      amnt = max_xfer;
 	    else
 	      amnt = rv;
-	    if (flags & FL_USB_EDBG)
-		result = usb_interrupt_write(udev, write_ep,
-					     buf + offset, amnt, 5000);
-	    else
-		result = usb_bulk_write(udev, write_ep,
-					buf + offset, amnt, 5000);
+	    result = usb_bulk_write(udev, write_ep,
+				    buf + offset, amnt, 5000);
 	    if (result != amnt)
 	    {
 	      fprintf(stderr, "USB bulk write error: %s\n",
@@ -1033,12 +995,8 @@ static void *usb_thread_read(void *data)
       char buf[MAX_MESSAGE + sizeof(unsigned int)];
       int rv;
 
-      if (flags & FL_USB_EDBG)
-	  rv = usb_interrupt_read(udev, read_ep, buf + sizeof(unsigned int),
-				  max_xfer, 0);
-      else
-	  rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int),
-			     max_xfer, 0);
+      rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int),
+			 max_xfer, 0);
       if (rv == 0 || rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
       {
 	/* OK, try again */
@@ -1189,6 +1147,194 @@ void jtag::resetUSB(void)
 #endif
 }
 
+#ifdef HAVE_LIBHIDAPI
+static void *hid_thread(void * data)
+{
+  struct pollfd fds[1];
+  struct hid_thread_data *hdata = (struct hid_thread_data *)data;
+
+  fds[0].fd = pype[0];
+  fds[0].events = POLLIN | POLLRDNORM;
+
+  debugOut("HID thread started\n");
+
+  while (1)
+    {
+      // the +1 is since hidapi needs one byte for the report number
+      unsigned char buf[MAX_MESSAGE + 1];
+      int rv;
+
+      // Poll for data from main thread.
+      // Wait for at most 50 ms, so we can regularly
+      // ping for events even if no upstream activity
+      // is present.
+      fds[0].revents = 0;
+      rv = poll(fds, 1, 50);
+      if (rv < 0)
+	{
+	  if (errno != EINTR)
+	    perror("poll()");
+	  continue;
+	}
+      if (rv == 0)
+        {
+	  // timed out, so just ping for event
+	  buf[0] = 0;
+	  buf[1] = EDBG_VENDOR_AVR_EVT;
+	  rv = hid_write(hdev, buf, hdata->max_pkt_size + 1);
+	  if (rv < 0)
+	    throw jtag_exception("Querying for event: hid_write() failed");
+
+	  rv = hid_read_timeout(hdev, buf, hdata->max_pkt_size + 1, 50);
+	  if (rv <= 0)
+	  {
+	    debugOut("Querying for event: hid_read() failed (%d)\n",
+		     rv);
+	    continue;
+	  }
+	  // Now examine whether the reply actually contained an event.
+	  if (buf[0] != EDBG_VENDOR_AVR_EVT)
+	  {
+	    debugOut("Querying for event: unexpected response (0x%02x)\n",
+		     buf[0]);
+	    continue;
+	  }
+	  if (buf[1] == 0 && buf[2] == 0)
+	    // nothing returned
+	    continue;
+	  unsigned int len = buf[1] * 256 + buf[2];
+	  if (len > MAX_MESSAGE - 10)
+	  {
+	    debugOut("Querying for event: insane event size %u\n",
+		     len);
+	    continue;
+	  }
+	  // tag this as an event packet
+	  buf[3] = TOKEN_EVT3;
+	  // make room to prepend packet length
+	  memmove(buf + sizeof(unsigned int), buf + 3, len);
+	  memcpy(buf, &len, sizeof(unsigned int));
+	  // pass event upstream
+	  write(pype[0], buf, len);
+	  continue;
+	}
+
+      if ((fds[0].revents & POLLERR) != 0)
+	{
+	  fprintf(stderr, "poll() returned POLLERR, why?\n");
+	  fds[0].revents &= ~POLLERR;
+	}
+      if ((fds[0].revents & (POLLNVAL | POLLHUP)) != 0)
+	// fd is closed
+	pthread_exit((void *)0);
+
+      if (fds[0].revents != 0)
+	{
+	  // something is in the pipe there, presumably a command
+	  if ((rv = read(pype[0], buf, MAX_MESSAGE)) > 0)
+	    {
+	      if (rv < 6)
+	      {
+		debugOut("Reading command from AVaRICE failed\n");
+		continue;
+	      }
+	      if (rv > MAX_MESSAGE - 4)
+	      {
+		throw jtag_exception("Oversized command requested");
+	      }
+	      memmove(buf + 5, buf, rv);
+	      buf[0] = 0;	// no report ID
+	      buf[1] = EDBG_VENDOR_AVR_CMD;
+	      buf[2] = 0x11;	// XXX fragment info
+	      buf[3] = (unsigned int)rv >> 8;
+	      buf[4] = (unsigned int)rv;
+	      rv = hid_write(hdev, buf, hdata->max_pkt_size + 1);
+	      if (rv != hdata->max_pkt_size + 1)
+	      {
+		debugOut("hid_write: short write, %u vs. %d\n",
+			 hdata->max_pkt_size + 1, rv);
+		continue;
+	      }
+	      for (;;)
+	      {
+		rv = hid_read_timeout(hdev, buf, hdata->max_pkt_size + 1, 50);
+		if (rv < 0)
+		  throw jtag_exception("Error reading HID");
+		if (rv == 0)
+		  continue;
+		if (buf[0] != EDBG_VENDOR_AVR_CMD)
+		{
+		  debugOut("Unexpected response to CMD: 0x%02x\n", buf[0]);
+		  continue;
+		}
+		break;
+	      }
+
+	      // Query response
+	      for (;;)
+	      {
+		buf[0] = 0;
+		buf[1] = EDBG_VENDOR_AVR_RSP;
+		rv = hid_write(hdev, buf, hdata->max_pkt_size + 1);
+		if (rv < 0)
+		  throw jtag_exception("Querying for response: hid_write() failed");
+
+		rv = hid_read_timeout(hdev, buf, hdata->max_pkt_size + 1, 500);
+		if (rv <= 0)
+		{
+		  debugOut("Querying for response: hid_read() failed (%d)\n",
+			   rv);
+		  continue;
+		}
+		debugOut("buf %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			 buf[0], buf[1], buf[2], buf[3], buf[4], buf[5],
+			 buf[6], buf[7]);
+		// Now examine whether the reply actually contained a response.
+		if (buf[0] != EDBG_VENDOR_AVR_RSP)
+		{
+		  debugOut("Querying for response: unexpected response (0x%02x)\n",
+			   buf[0]);
+		  continue;
+		}
+		if (buf[1] != 0x11)
+		  // XXX support fragments
+		  throw jtag_exception("No fragment support yet");
+
+		if (buf[2] == 0 && buf[3] == 0)
+		  // nothing returned
+		  continue;
+		unsigned int len = buf[2] * 256 + buf[3];
+		if (len > MAX_MESSAGE - 10)
+		{
+		  debugOut("Querying for response: insane event size %u\n",
+			   len);
+		  continue;
+		}
+		memcpy(buf, &len, sizeof(unsigned int));
+		// pass event upstream
+		write(pype[0], buf, len + sizeof(unsigned int));
+		break;
+	      }
+
+	    }
+	  else if (errno != EINTR && errno != EAGAIN)
+	    {
+	      fprintf(stderr, "read error from AVaRICE: %s\n",
+		      strerror(errno));
+	      pthread_exit((void *)1);
+	    }
+	}
+    }
+}
+
+static void
+cleanup_hid(void)
+{
+  hid_close(hdev);
+  hdev = NULL;
+}
+#endif
+
 static void
 cleanup_usb(void)
 {
@@ -1212,6 +1358,14 @@ void jtag::openUSB(const char *jtagDeviceName)
       hdev = openhid(jtagDeviceName);
       if (hdev == NULL)
 	throw jtag_exception("cannot open HID");
+
+      static struct hid_thread_data hdata;
+      hdata.max_pkt_size = 512; // getMaxPktSize();
+      pthread_create(&htid, NULL, hid_thread, &hdata);
+#  ifdef __FreeBSD__
+      pthread_set_name_np(htid, "HID thread");
+#  endif
+      atexit(cleanup_hid);
 #else  // !HAVE_LIBHIDAPI
       throw jtag_exception("EDBG/CMSIS-DAP devices require libhidapi support");
 #endif
