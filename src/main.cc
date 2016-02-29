@@ -160,9 +160,9 @@ static void usage(const char *progname)
     fprintf(stderr,
 	    "  -2, --mkII                  Connect to JTAG ICE mkII\n");
     fprintf(stderr,
-	    "  -3, --jtag3                 Connect to JTAGICE3\n");
+	    "  -3, --jtag3                 Connect to JTAGICE3 (Firmware 2.x)\n");
     fprintf(stderr,
-            "  -4, --edbg                  EDBG Integrated Debugger\n");
+            "  -4, --edbg                  Atmel-ICE, or JTAGICE3 (firmware 3.x), or EDBG Integrated Debugger\n");
     fprintf(stderr,
             "  -B, --jtag-bitrate <rate>   Set the bitrate that the JTAG box communicates\n"
             "                                with the avr target device. This must be less\n"
@@ -568,11 +568,14 @@ int main(int argc, char **argv)
 
       if (cp != NULL)
 	jtagDeviceName = cp;
-      else if (devicetype == DRAGON || devicetype == JTAG3)
+      else if (devicetype == DRAGON || devicetype == JTAG3 || devicetype == EDBG)
 	jtagDeviceName = "usb";
       else
 	jtagDeviceName = "/dev/avrjtag";
     }
+
+    if (debugMode)
+      setvbuf(stderr, NULL, _IOLBF, 0);
 
     int rv = 0;			// return value from main()
 
