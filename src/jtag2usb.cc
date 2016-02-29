@@ -1215,7 +1215,7 @@ static void *hid_thread(void * data)
 	  memmove(buf + sizeof(unsigned int), buf + 3, len);
 	  memcpy(buf, &len, sizeof(unsigned int));
 	  // pass event upstream
-	  write(pype[0], buf, len);
+	  write(pype[0], buf, len + sizeof(unsigned int));
 	  continue;
 	}
 
