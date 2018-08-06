@@ -1,0 +1,1 @@
+perl %~dp0\ice-gdb --debugger avr-insight %*

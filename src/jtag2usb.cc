@@ -994,6 +994,7 @@ static void *usb_thread(void * data)
 /* USB writer thread */
 static void *usb_thread_write(void * data)
 {
+	(void)data;
   while (1)
     {
       char buf[MAX_MESSAGE];

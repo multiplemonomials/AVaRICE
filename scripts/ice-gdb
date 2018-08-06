@@ -1,6 +1,10 @@
-#!@pathperl@
-$prefix = "@prefix@";
-$datadir = "@datadir@";
+#!/usr/bin/perl
+
+use Cwd 'abs_path';
+use File::Basename;
+
+$prefix = abs_path(dirname($0) . "/..");
+$datadir = "${prefix}/share";
 $debugger = "avr-gdb";
 
 @argcmds = ( "-b", "--cd", "--command", "--core", "--pid", "--directory",
@@ -39,6 +43,12 @@ for ($i = 0; $i <= $#ARGV; $i++) {
 
 $exe = "" if $capture;
 
-system "start-avarice $exe" unless $avarice_running;
+if ($avarice_running)
+{
+	print "executing: start-avarice $exe"; 
+	system "start-avarice $exe";
+}
 unshift @ARGV, ($debugger, "-x", "$datadir/avarice/gdb-avarice-script" );
+
+print "executing: @ARGV";
 exec @ARGV;
