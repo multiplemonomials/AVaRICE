@@ -39,21 +39,21 @@
 
 void jtag3::enableProgramming(void)
 {
-		if (proto != PROTO_DW)
-		{
-	programmingEnabled = true;
-	doSimpleJtagCommand(CMD3_ENTER_PROGMODE, "enter progmode");
-		}
+	if (proto != PROTO_DW)
+	{
+		programmingEnabled = true;
+		doSimpleJtagCommand(CMD3_ENTER_PROGMODE, "enter progmode");
+	}
 }
 
 
 void jtag3::disableProgramming(void)
 {
-		if (proto != PROTO_DW)
-		{
-	programmingEnabled = false;
-	doSimpleJtagCommand(CMD3_LEAVE_PROGMODE, "leave progmode");
-		}
+	if (proto != PROTO_DW)
+	{
+		programmingEnabled = false;
+		doSimpleJtagCommand(CMD3_LEAVE_PROGMODE, "leave progmode");
+	}
 }
 
 
@@ -61,53 +61,59 @@ void jtag3::disableProgramming(void)
 // (unless the save-eeprom fuse is set).
 void jtag3::eraseProgramMemory(void)
 {
-		if (proto == PROTO_DW)
-				// debugWIRE auto-erases when programming
-				return;
+	if (proto == PROTO_DW)
+	{
+		// debugWIRE auto-erases when programming
+		return;
+	}
+	
+	uchar *resp;
+	int respsize;
+	uchar buf[8];
 
-		uchar *resp;
-		int respsize;
-		uchar buf[8];
+	buf[0] = SCOPE_AVR;
+	buf[1] = CMD3_ERASE_MEMORY;
+	buf[2] = 0;
+	buf[3] = XMEGA_ERASE_CHIP;
+	buf[4] = buf[5] = buf[6] = buf[7] = 0; /* page address */
 
-		buf[0] = SCOPE_AVR;
-		buf[1] = CMD3_ERASE_MEMORY;
-		buf[2] = 0;
-		buf[3] = XMEGA_ERASE_CHIP;
-		buf[4] = buf[5] = buf[6] = buf[7] = 0; /* page address */
+	doJtagCommand(buf, 8, "chip erase", resp, respsize);
 
-		doJtagCommand(buf, 8, "chip erase", resp, respsize);
-
-		delete [] resp;
+	delete [] resp;
 }
 
 void jtag3::eraseProgramPage(unsigned long address)
 {
-		uchar *resp;
-		int respsize;
-		uchar buf[8];
+	uchar *resp;
+	int respsize;
+	uchar buf[8];
 
-		buf[0] = SCOPE_AVR;
-		buf[1] = CMD3_ERASE_MEMORY;
-		buf[2] = 0;
-		if (is_xmega && address >= appsize)
-		{
-				buf[3] = XMEGA_ERASE_BOOT_PAGE;
-				address -= appsize;
-		}
-		else
-		{
-				buf[3] = XMEGA_ERASE_APP_PAGE;
-		}
-		u32_to_b4(buf + 4, address);
+	buf[0] = SCOPE_AVR;
+	buf[1] = CMD3_ERASE_MEMORY;
+	buf[2] = 0;
+	if (is_xmega && address >= appsize)
+	{
+		buf[3] = XMEGA_ERASE_BOOT_PAGE;
+		address -= appsize;
+	}
+	else
+	{
+		buf[3] = XMEGA_ERASE_APP_PAGE;
+	}
+	u32_to_b4(buf + 4, address);
 
-		doJtagCommand(buf, 8, "page erase", resp, respsize);
+	doJtagCommand(buf, 8, "page erase", resp, respsize);
 
-		delete [] resp;
+	delete [] resp;
 }
 
 
 void jtag3::downloadToTarget(const char* filename, bool program, bool verify)
 {
-		statusOut("\nDownload not done.\n");
-		throw jtag_exception("Target programming not implemented for JTAGICE3");
+	(void)filename;
+	(void)program;
+	(void)verify;
+	
+	statusOut("\nDownload not done.\n");
+	throw jtag_exception("Target programming not implemented for JTAGICE3");
 }

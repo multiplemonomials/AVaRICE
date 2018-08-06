@@ -308,9 +308,6 @@ void jtag3::doJtagCommand(uchar *command, int  commandSize,
 						              uchar *&response, int &responseSize)
 		throw (jtag_exception)
 {
-		int sizeseen = 0;
-		uchar code = 0;
-
 		if (sendJtagCommand(command, commandSize, name, response, responseSize))
 				return;
 
@@ -355,18 +352,19 @@ void jtag3::doSimpleJtagCommand(uchar command, const char *name, uchar scope)
 
 void jtag3::changeBitRate(int newBitRate)
 {
+	(void)newBitRate;
 	throw;
 }
 
 bool jtag3::synchroniseAt(int bitrate)
 {
+	(void)bitrate;
 	throw;
 }
 
 void jtag3::setDeviceDescriptor(jtag_device_def_type *dev)
 {
 	uchar *param, paramsize;
-	int respSize;
 	jtag3_device_desc_type d3;
 
 	if (is_xmega)

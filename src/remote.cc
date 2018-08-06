@@ -619,7 +619,7 @@ static bool monitor(const char *cmd)
 		if (strncmp(cmd, "version", ln) == 0)
 		{
 				char reply[80];
-				sprintf(reply, "AVaRICE version %s, %s %s\n",
+				sprintf(reply, "AVaRICE version %s %s %s\n",
 						    PACKAGE_VERSION, __DATE__, __TIME__);
 				replyString(reply);
 				return true;

@@ -157,97 +157,97 @@ void jtag3::resumeProgram(void)
 void jtag3::expectEvent(bool &breakpoint, bool &gdbInterrupt)
 {
 	uchar *evtbuf;
-	int evtsize, i;
+	int evtsize;
 	unsigned short seqno;
 
 	if (cached_event != NULL)
 	{
-			evtbuf = cached_event;
-			cached_event = NULL;
+		evtbuf = cached_event;
+		cached_event = NULL;
 	}
 	else
 	{
-			evtsize = recvFrame(evtbuf, seqno);
-			if (evtsize > 0) {
-					// XXX if not event, should push frame back into queue...
-					// We really need a queue of received frames.
-					if (seqno != 0xffff)
-					{
-						  debugOut("Expected event packet, got other response");
-						  return;
-					}
-			}
-			else
+		evtsize = recvFrame(evtbuf, seqno);
+		if (evtsize > 0) {
+			// XXX if not event, should push frame back into queue...
+			// We really need a queue of received frames.
+			if (seqno != 0xffff)
 			{
-					debugOut("Timed out waiting for an event");
-					return;
+				  debugOut("Expected event packet, got other response");
+				  return;
 			}
+		}
+		else
+		{
+			debugOut("Timed out waiting for an event");
+			return;
+		}
 	}
 
 	breakpoint = gdbInterrupt = false;
 
 	switch ((evtbuf[0] << 8) | evtbuf[1])
 	{
-			// Program stopped at some kind of breakpoint.
-			// On Xmega, byte 7 denotes the reason:
-			//   0x01 soft BP
-			//   0x10 hard BP (byte 8 contains BP #, or 3 for data BP)
-			//   0x20, 0x21 "run to address" or single-step
-			//   0x40 reset, leave progmode etc.
-			// On megaAVR, byte 6 , byte 7 are likely the "break status
-			// register" (MSB, LSB), see here:
-			// http://people.ece.cornell.edu/land/courses/ece4760/FinalProjects/s2009/jgs33_rrw32/Final%20Paper/index.html
-			// The bits do not fully match that description but to
-			// a good degree.
-			case (SCOPE_AVR << 8) | EVT3_BREAK:
-					if ((!is_xmega && evtbuf[7] != 0) ||
-						  (is_xmega && evtbuf[7] != 0x40))
-					{
-						  // program breakpoint
-						  cached_pc = 2 * b4_to_u32(evtbuf + 2);
-						  cached_pc_is_valid = true;
-						  breakpoint = true;
-						  debugOut("caching PC: 0x%04x\n", cached_pc);
-					}
-					else
-					{
-						  debugOut("ignoring break event\n");
-					}
-					break;
+		// Program stopped at some kind of breakpoint.
+		// On Xmega, byte 7 denotes the reason:
+		//   0x01 soft BP
+		//   0x10 hard BP (byte 8 contains BP #, or 3 for data BP)
+		//   0x20, 0x21 "run to address" or single-step
+		//   0x40 reset, leave progmode etc.
+		// On megaAVR, byte 6 , byte 7 are likely the "break status
+		// register" (MSB, LSB), see here:
+		// http://people.ece.cornell.edu/land/courses/ece4760/FinalProjects/s2009/jgs33_rrw32/Final%20Paper/index.html
+		// The bits do not fully match that description but to
+		// a good degree.
+		case (SCOPE_AVR << 8) | EVT3_BREAK:
+			if ((!is_xmega && evtbuf[7] != 0) ||
+				  (is_xmega && evtbuf[7] != 0x40))
+			{
+				  // program breakpoint
+				  cached_pc = 2 * b4_to_u32(evtbuf + 2);
+				  cached_pc_is_valid = true;
+				  breakpoint = true;
+				  debugOut("caching PC: 0x%04x\n", cached_pc);
+			}
+			else
+			{
+				  debugOut("ignoring break event\n");
+			}
+			break;
 
-			case (SCOPE_AVR << 8) | EVT3_IDR:
-					statusOut("IDR dirty: 0x%02x\n", evtbuf[3]);
-					break;
+		case (SCOPE_AVR << 8) | EVT3_IDR:
+			statusOut("IDR dirty: 0x%02x\n", evtbuf[3]);
+			break;
 
-			case (SCOPE_GENERAL << 8) | EVT3_POWER:
-					if (evtbuf[3] == 0)
-					{
-						  gdbInterrupt = true;
-						  statusOut("\nTarget power turned off\n");
-					}
-					else
-					{
-						  statusOut("\nTarget power returned\n");
-					}
-					break;
+		case (SCOPE_GENERAL << 8) | EVT3_POWER:
+			if (evtbuf[3] == 0)
+			{
+				  gdbInterrupt = true;
+				  statusOut("\nTarget power turned off\n");
+			}
+			else
+			{
+				  statusOut("\nTarget power returned\n");
+			}
+			break;
 
-			case (SCOPE_GENERAL << 8) | EVT3_SLEEP:
-					if (evtbuf[3] == 0)
-					{
-						  //gdbInterrupt = true;
-						  statusOut("\nTarget went to sleep\n");
-					}
-					else
-					{
-						  //gdbInterrupt = true;
-						  statusOut("\nTarget went out of sleep\n");
-					}
-					break;
+		case (SCOPE_GENERAL << 8) | EVT3_SLEEP:
+			if (evtbuf[3] == 0)
+			{
+				  //gdbInterrupt = true;
+				  statusOut("\nTarget went to sleep\n");
+			}
+			else
+			{
+				  //gdbInterrupt = true;
+				  statusOut("\nTarget went out of sleep\n");
+			}
+			break;
 
-			default:
-					gdbInterrupt = true;
-					statusOut("\nUnhandled JTAGICE3 event: 0x%02x, 0x%02x\n",
-						        evtbuf[0], evtbuf[1]);
+		default:
+			gdbInterrupt = true;
+			statusOut("\nUnhandled JTAGICE3 event: 0x%02x, 0x%02x\n",
+						evtbuf[0], evtbuf[1]);
 	}
 
 	delete [] evtbuf;
@@ -255,15 +255,15 @@ void jtag3::expectEvent(bool &breakpoint, bool &gdbInterrupt)
 
 bool jtag3::eventLoop(void)
 {
-		int maxfd;
-		fd_set readfds;
-		bool breakpoint = false, gdbInterrupt = false;
+	int maxfd;
+	fd_set readfds;
+	bool breakpoint = false, gdbInterrupt = false;
 
-		// Now that we are "going", wait for either a response from the JTAG
-		// box or a nudge from GDB.
+	// Now that we are "going", wait for either a response from the JTAG
+	// box or a nudge from GDB.
 
-		for (;;)
-			{
+	for (;;)
+	{
 		debugOut("Waiting for input.\n");
 
 		// Check for input from JTAG ICE (breakpoint, sleep, info, power)
@@ -279,38 +279,37 @@ bool jtag3::eventLoop(void)
 
 		int numfds = select(maxfd + 1, &readfds, 0, 0, 0);
 		if (numfds < 0)
-						  throw jtag_exception("GDB/JTAG ICE communications failure");
+			throw jtag_exception("GDB/JTAG ICE communications failure");
 
 		if (gdbFileDescriptor != -1 && FD_ISSET(gdbFileDescriptor, &readfds))
+		{
+			int c = getDebugChar();
+			if (c == 3) // interrupt
 			{
-		int c = getDebugChar();
-		if (c == 3) // interrupt
-			{
-					debugOut("interrupted by GDB\n");
-					gdbInterrupt = true;
+				debugOut("interrupted by GDB\n");
+				gdbInterrupt = true;
 			}
-		else
+			else
 				debugOut("Unexpected GDB input `%02x'\n", c);
-			}
+		}
 
 		if (FD_ISSET(jtagBox, &readfds))
-			{
-				expectEvent(breakpoint, gdbInterrupt);
-			}
+		{
+			expectEvent(breakpoint, gdbInterrupt);
+		}
 
 		// We give priority to user interrupts
 		if (gdbInterrupt)
-				return false;
+			return false;
 		if (breakpoint)
-				return true;
-			}
+			return true;
+	}
 }
 
 
 void jtag3::jtagSingleStep(void)
 {
-	uchar cmd[] = { SCOPE_AVR, CMD3_STEP,
-			0, 0x01, 0x01 };
+	uchar cmd[] = { SCOPE_AVR, CMD3_STEP, 0, 0x01, 0x01 };
 	uchar *resp;
 	int respsize;
 
@@ -319,14 +318,14 @@ void jtag3::jtagSingleStep(void)
 	cached_pc_is_valid = false;
 
 	try
-		{
-			doJtagCommand(cmd, sizeof cmd, "single-step", resp, respsize);
-		}
+	{
+		doJtagCommand(cmd, sizeof cmd, "single-step", resp, respsize);
+	}
 	catch (jtag_io_exception& e)
-		{
-			if (e.get_response() != RSP3_FAIL_WRONG_MODE)
-	throw;
-		}
+	{
+		if (e.get_response() != RSP3_FAIL_WRONG_MODE)
+			throw;
+	}
 	delete [] resp;
 
 	bool bp, gdb;

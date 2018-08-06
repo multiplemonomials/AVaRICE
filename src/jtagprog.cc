@@ -255,98 +255,103 @@ void jtag1::eraseProgramPage(unsigned long address)
 void jtag1::downloadToTarget(const char* filename, bool program, bool verify)
 {
 #if ENABLE_TARGET_PROGRAMMING
-		// Basically, we just open the file and copy blocks over to the JTAG
-		// box.
-		struct stat ifstat;
-		const char *target = NULL;
-		const char *default_target = "binary";
-		unsigned int page_size;
-		bool done = 0;
-		bfd *file;
-		asection *p;
+	// Basically, we just open the file and copy blocks over to the JTAG
+	// box.
+	struct stat ifstat;
+	const char *target = NULL;
+	const char *default_target = "binary";
+	unsigned int page_size;
+	bool done = 0;
+	bfd *file;
+	asection *p;
 
-		static BFDimage flashimg, eepromimg;
+	static BFDimage flashimg, eepromimg;
 
-		initImage(&flashimg);
-		initImage(&eepromimg);
+	initImage(&flashimg);
+	initImage(&eepromimg);
 
-		flashimg.name = BFDmemoryTypeString[MEM_FLASH];
-		eepromimg.name = BFDmemoryTypeString[MEM_EEPROM];
+	flashimg.name = BFDmemoryTypeString[MEM_FLASH];
+	eepromimg.name = BFDmemoryTypeString[MEM_EEPROM];
 
-		if (stat(filename, &ifstat) < 0)
-				throw jtag_exception("Can't stat() image file");
+	if (stat(filename, &ifstat) < 0)
+			throw jtag_exception("Can't stat() image file");
 
-		// Open the input file.
-		bfd_init();
+	// Open the input file.
+	bfd_init();
 
-		// Auto detect file format by a loop iterated at most two times.
-		//   1. Auto-detect file format.
-		//   2. If auto-detect failed, assume binary and iterate once more over
-		//      loop.
-		while (! done)
+	// Auto detect file format by a loop iterated at most two times.
+	//   1. Auto-detect file format.
+	//   2. If auto-detect failed, assume binary and iterate once more over
+	//      loop.
+	while (! done)
+	{
+		file = bfd_openr(filename, target);
+		if (! file)
 		{
-				file = bfd_openr(filename, target);
-				if (! file)
-				{
-						fprintf( stderr, "Could not open input file %s:%s\n", filename,
-						         bfd_errmsg(bfd_get_error()) );
-						return;
-				}
-
-				// Check if file format is supported. If not, go for binary mode.
-				else if (check_file_format(file))
-				{
-						// File format detection failed. Assuming binary file
-						// BFD section flags are CONTENTS,ALLOC,LOAD,DATA
-						// We must force CODE in stead of DATA
-						fprintf(stderr, "Warning: File format unknown, assuming "
-						        "binary.\n");
-						target = default_target;
-				}
-
-				else
-						done = 1;
+			fprintf( stderr, "Could not open input file %s:%s\n", filename,
+					 bfd_errmsg(bfd_get_error()) );
+			return;
 		}
 
-
-		// Configure for JTAG download/programming
-
-		// Set the flash page and eeprom page sizes (These are device dependent)
-		page_size = get_page_size(MEM_FLASH);
-
-		debugOut("Flash page size: 0x%0x\nEEPROM page size: 0x%0x\n",
-						 page_size, get_page_size(MEM_EEPROM));
-
-		setJtagParameter(JTAG_P_FLASH_PAGESIZE_LOW, page_size & 0xff);
-		setJtagParameter(JTAG_P_FLASH_PAGESIZE_HIGH, page_size >> 8);
-
-		setJtagParameter(JTAG_P_EEPROM_PAGESIZE,
-						         get_page_size(MEM_EEPROM));
-
-		// Create RAM image by reading all sections in file
-		p = file->sections;
-		while (p)
+		// Check if file format is supported. If not, go for binary mode.
+		else if (check_file_format(file))
 		{
-				jtag_create_image(file, p, &flashimg, MEM_FLASH);
-				jtag_create_image(file, p, &eepromimg, MEM_EEPROM);
-				p = p->next;
+			// File format detection failed. Assuming binary file
+			// BFD section flags are CONTENTS,ALLOC,LOAD,DATA
+			// We must force CODE in stead of DATA
+			fprintf(stderr, "Warning: File format unknown, assuming "
+					"binary.\n");
+			target = default_target;
 		}
 
-		enableProgramming();
+		else
+			done = 1;
+	}
 
-		// Write the complete FLASH/EEPROM images to the device.
-		if (flashimg.has_data)
-				jtag_flash_image(&flashimg, MEM_FLASH, program, verify);
-		if (eepromimg.has_data)
-				jtag_flash_image(&eepromimg, MEM_EEPROM, program, verify);
 
-		disableProgramming();
+	// Configure for JTAG download/programming
 
-		(void)(bfd_close(file));
+	// Set the flash page and eeprom page sizes (These are device dependent)
+	page_size = get_page_size(MEM_FLASH);
 
-		statusOut("\nDownload complete.\n");
+	debugOut("Flash page size: 0x%0x\nEEPROM page size: 0x%0x\n",
+					 page_size, get_page_size(MEM_EEPROM));
+
+	setJtagParameter(JTAG_P_FLASH_PAGESIZE_LOW, page_size & 0xff);
+	setJtagParameter(JTAG_P_FLASH_PAGESIZE_HIGH, page_size >> 8);
+
+	setJtagParameter(JTAG_P_EEPROM_PAGESIZE,
+							 get_page_size(MEM_EEPROM));
+
+	// Create RAM image by reading all sections in file
+	p = file->sections;
+	while (p)
+	{
+		jtag_create_image(file, p, &flashimg, MEM_FLASH);
+		jtag_create_image(file, p, &eepromimg, MEM_EEPROM);
+		p = p->next;
+	}
+
+	enableProgramming();
+
+	// Write the complete FLASH/EEPROM images to the device.
+	if (flashimg.has_data)
+		jtag_flash_image(&flashimg, MEM_FLASH, program, verify);
+	if (eepromimg.has_data)
+		jtag_flash_image(&eepromimg, MEM_EEPROM, program, verify);
+
+	disableProgramming();
+
+	(void)(bfd_close(file));
+
+	statusOut("\nDownload complete.\n");
 #else  // !ENABLE_TARGET_PROGRAMMING
-		statusOut("\nDownload not done.\n");
-		throw jtag_exception("AVaRICE was not configured for target programming");
+	
+	(void)filename;
+	(void)program;
+	(void)verify;
+	
+	statusOut("\nDownload not done.\n");
+	throw jtag_exception("AVaRICE was not configured for target programming");
 #endif // ENABLE_TARGET_PROGRAMMING
 }

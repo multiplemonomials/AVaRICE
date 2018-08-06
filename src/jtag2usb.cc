@@ -1042,147 +1042,147 @@ static void *usb_thread_write(void * data)
 /* USB event reader thread (JTAGICE3 only) */
 static void *usb_thread_read(void *data)
 {
+	(void)data;
 	while (1)
-		{
-			char buf[MAX_MESSAGE + sizeof(unsigned int)];
-			int rv;
-
-			rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int),
-			 max_xfer, 0);
-			if (rv == 0 || rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
-			{
-	/* OK, try again */
-			}
-			else if (rv < 0)
-			{
-	fprintf(stderr, "USB bulk read error: %s (%d)\n",
-		usb_strerror(), rv);
-	pthread_exit((void *)1);
-			}
-			else
-			{
-	/*
-	 * We read a packet from USB.  If it's been a partial
-	 * one (result matches the endpoint size), see to get
-	 * more, until we have either a short read, or a ZLP.
-	 */
-	unsigned int pkt_len = rv;
-	bool needmore = rv == max_xfer;
-
-	/* OK, if there is more to read, do so. */
-	while (needmore)
 	{
-		int maxlen = MAX_MESSAGE - pkt_len;
-		if (maxlen > max_xfer)
-			maxlen = max_xfer;
-		rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int) + pkt_len,
-					 maxlen, 100);
+		char buf[MAX_MESSAGE + sizeof(unsigned int)];
+		int rv;
 
-		if (rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
+		rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int), max_xfer, 0);
+		if (rv == 0 || rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
 		{
-			continue;
+			/* OK, try again */
 		}
-		if (rv == 0)
+		else if (rv < 0)
 		{
-			/* Zero-length packet: we are done. */
-			break;
-		}
-		if (rv < 0)
-		{
-			fprintf(stderr,
-				"USB bulk read error in continuation block: %s\n",
-					usb_strerror());
+			fprintf(stderr, "USB bulk read error: %s (%d)\n", usb_strerror(), rv);
 			pthread_exit((void *)1);
 		}
-
-		needmore = rv == max_xfer;
-		pkt_len += rv;
-		if (pkt_len == MAX_MESSAGE)
-		{
-			/* should not happen */
-			fprintf(stderr, "Message too big in USB receive.\n");
-			break;
-		}
-	}
-
-	unsigned int writesize = pkt_len;
-	char *writep = buf + sizeof(unsigned int);
-	if (event_ep != 0)
+		else
 		{
 			/*
-			 * On the JTAGICE3, we prepend the message length, so
-			 * the parent knows how much data to expect from the
-			 * pipe.
+			 * We read a packet from USB.  If it's been a partial
+			 * one (result matches the endpoint size), see to get
+			 * more, until we have either a short read, or a ZLP.
 			 */
-			memcpy(buf, &pkt_len, sizeof(unsigned int));
-			writep -= sizeof(unsigned int);
-			writesize += sizeof(unsigned int);
-		}
+			unsigned int pkt_len = rv;
+			bool needmore = rv == max_xfer;
 
-	if (write(pype[0], writep, writesize) != writesize)
-	{
-		fprintf(stderr, "short write to AVaRICE: %s\n",
-			strerror(errno));
-		pthread_exit((void *)1);
-	}
+			/* OK, if there is more to read, do so. */
+			while (needmore)
+			{
+				int maxlen = MAX_MESSAGE - pkt_len;
+				if (maxlen > max_xfer)
+					maxlen = max_xfer;
+				rv = usb_bulk_read(udev, read_ep, buf + sizeof(unsigned int) + pkt_len,
+							 maxlen, 100);
+
+				if (rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
+				{
+					continue;
+				}
+				if (rv == 0)
+				{
+					/* Zero-length packet: we are done. */
+					break;
+				}
+				if (rv < 0)
+				{
+					fprintf(stderr,
+						"USB bulk read error in continuation block: %s\n",
+							usb_strerror());
+					pthread_exit((void *)1);
+				}
+
+				needmore = rv == max_xfer;
+				pkt_len += rv;
+				if (pkt_len == MAX_MESSAGE)
+				{
+					/* should not happen */
+					fprintf(stderr, "Message too big in USB receive.\n");
+					break;
+				}
+			}
+
+			unsigned int writesize = pkt_len;
+			char *writep = buf + sizeof(unsigned int);
+			if (event_ep != 0)
+				{
+					/*
+					 * On the JTAGICE3, we prepend the message length, so
+					 * the parent knows how much data to expect from the
+					 * pipe.
+					 */
+					memcpy(buf, &pkt_len, sizeof(unsigned int));
+					writep -= sizeof(unsigned int);
+					writesize += sizeof(unsigned int);
+				}
+
+			if (write(pype[0], writep, writesize) != writesize)
+			{
+				fprintf(stderr, "short write to AVaRICE: %s\n",
+					strerror(errno));
+				pthread_exit((void *)1);
 			}
 		}
+	}
 }
 
 /* USB reader thread */
 static void *usb_thread_event(void *data)
 {
+	(void)data;
 	while (1)
-		{
-			/*
-			 * Events are shorter than regular data packets, so no
-			 * reassembly and ZLP handling is needed here.
-			 */
-			char buf[USBDEV_MAX_EVT_3 + sizeof(unsigned int)];
-			int rv;
+	{
+		/*
+		 * Events are shorter than regular data packets, so no
+		 * reassembly and ZLP handling is needed here.
+		 */
+		char buf[USBDEV_MAX_EVT_3 + sizeof(unsigned int)];
+		int rv;
 
-			rv = usb_bulk_read(udev, event_ep, buf + sizeof(unsigned int),
-			 USBDEV_MAX_EVT_3, 0);
-			if (rv == 0 || rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
+		rv = usb_bulk_read(udev, event_ep, buf + sizeof(unsigned int),
+		 USBDEV_MAX_EVT_3, 0);
+		if (rv == 0 || rv == -EINTR || rv == -EAGAIN || rv == -ETIMEDOUT)
+		{
+			/* OK, try again */
+		}
+		else if (rv < 0)
+		{
+			fprintf(stderr, "USB event read error: %s (%d)\n",
+				usb_strerror(), rv);
+			pthread_exit((void *)1);
+		}
+		else
+		{
+			if (buf[sizeof(unsigned int)] != TOKEN)
 			{
-	/* OK, try again */
-			}
-			else if (rv < 0)
-			{
-	fprintf(stderr, "USB event read error: %s (%d)\n",
-		usb_strerror(), rv);
-	pthread_exit((void *)1);
+				fprintf(stderr,
+					"usb_daemon(): first byte of event message is not TOKEN but 0x%02x\n",
+					buf[sizeof(unsigned int)]);
 			}
 			else
 			{
-	if (buf[sizeof(unsigned int)] != TOKEN)
-	{
-		fprintf(stderr,
-			"usb_daemon(): first byte of event message is not TOKEN but 0x%02x\n",
-			buf[sizeof(unsigned int)]);
-	}
-	else
-	{
-		unsigned int pkt_len = rv;
+				unsigned int pkt_len = rv;
 
-		/*
-		 * On the JTAGICE3, we prepend the message length first,
-		 * the parent knows how much data to expect from the
-		 * pipe.
-		 */
-		memcpy(buf, &pkt_len, sizeof(unsigned int));
+				/*
+				 * On the JTAGICE3, we prepend the message length first,
+				 * the parent knows how much data to expect from the
+				 * pipe.
+				 */
+				memcpy(buf, &pkt_len, sizeof(unsigned int));
 
-		buf[sizeof(unsigned int)] = TOKEN_EVT3;
-		if (write(pype[0], buf, pkt_len + sizeof(unsigned int)) !=
-				pkt_len + sizeof(unsigned int))
-		{
-			fprintf(stderr, "short write to AVaRICE: %s\n",
-				strerror(errno));
-			pthread_exit((void *)1);
-		}
-	}
+				buf[sizeof(unsigned int)] = TOKEN_EVT3;
+				if (write(pype[0], buf, pkt_len + sizeof(unsigned int)) !=
+						pkt_len + sizeof(unsigned int))
+				{
+					fprintf(stderr, "short write to AVaRICE: %s\n",
+						strerror(errno));
+					pthread_exit((void *)1);
+				}
 			}
 		}
+	}
 }
 #endif
 
@@ -1190,12 +1190,12 @@ void jtag::resetUSB(void)
 {
 #ifndef HAVE_LIBUSB_2_0
 	if (udev)
-		{
-			usb_resetep(udev, read_ep);
-			usb_resetep(udev, write_ep);
-			if (event_ep != 0)
-	usb_resetep(udev, event_ep);
-		}
+	{
+		usb_resetep(udev, read_ep);
+		usb_resetep(udev, write_ep);
+		if (event_ep != 0)
+			usb_resetep(udev, event_ep);
+	}
 #endif
 }
 
