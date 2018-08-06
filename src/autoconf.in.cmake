@@ -33,6 +33,9 @@
 /* Define to 1 if libusb is bsd's libusb20 */
 #cmakedefine HAVE_LIBUSB_2_0 1
 
+/* Define to 1 if you have libhidapi */
+#cmakedefine HAVE_LIBHIDAPI
+
 /* Define to 1 if you have the `memmove' function. */
 #cmakedefine HAVE_MEMMOVE 1
 

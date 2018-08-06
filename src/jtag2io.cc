@@ -21,15 +21,13 @@
  *
  * $Id$
  */
-
-
+ 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <termios.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <string.h>
@@ -40,6 +38,10 @@
 #include "jtag.h"
 #include "jtag2.h"
 #include "jtag2_defs.h"
+
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
+#endif
 
 jtag_io_exception::jtag_io_exception(unsigned int code)
 {

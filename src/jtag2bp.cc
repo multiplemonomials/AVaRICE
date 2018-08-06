@@ -30,13 +30,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <termios.h>
 #include <fcntl.h>
 #include <string.h>
 
 #include "avarice.h"
 #include "jtag.h"
 #include "jtag2.h"
+
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
+#endif
 
 bool jtag2::codeBreakpointAt(unsigned int address)
 {

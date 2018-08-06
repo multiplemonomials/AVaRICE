@@ -25,8 +25,13 @@
 #ifndef JTAG_H
 #define JTAG_H
 
+#include "avarice.h"
+
 #include <sys/types.h>
+
+#ifdef HAVE_TERMIOS_H
 #include <termios.h>
+#endif
 
 #include <exception>
 
@@ -759,7 +764,9 @@ class jtag
 {
 	protected:
 	// The initial serial port parameters. We restore them on exit.
+#ifdef HAVE_TERMIOS_H
 	struct termios oldtio;
+#endif
 	bool oldtioValid;
 
 	// The file descriptor used while talking to the JTAG ICE

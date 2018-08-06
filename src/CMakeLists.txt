@@ -41,8 +41,22 @@ set(AVARICE_SOURCES
 	gnu_getopt.h    
 	gnu_getopt1.c)
 
+# add executable
 add_executable(avarice ${AVARICE_SOURCES})
-target_link_libraries(avarice usb Threads::Threads)
+target_link_libraries(avarice Threads::Threads)
 target_include_directories(avarice PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+# link optional libraries
+if(USB_FOUND)
+	target_link_libraries(avarice usb)
+endif()
+
+if(HIDAPI_FOUND)
+	target_link_libraries(avarice hidapi)
+endif()
+
+if(BFD_FOUND)
+	target_link_libraries(avarice bfd)
+endif()
 
 install(TARGETS avarice DESTINATION bin)

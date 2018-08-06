@@ -15,8 +15,19 @@ include(LibraryUtils)
 include(CheckIncludeFileCXX)
 include(CheckFunctionExists)
 include(CMakePushCheckState)
+include(CheckCSourceCompiles)
 include(CheckCXXSourceCompiles)
 include(FindPackageHandleStandardArgs)
+include(CMakeFindDependencyMacro)
+include(CheckTypeSize)
+
+#control default build type.
+# ---------------------------------------------------------------
+
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Allowed build types for ${PROJECT_NAME}." FORCE)
+if("${CMAKE_BUILD_TYPE}" STREQUAL "")
+	set(CMAKE_BUILD_TYPE Release CACHE STRING "Type of build.  Controls debugging information and optimizations." FORCE)
+endif()
 
 # setup compiler flags
 # ---------------------------------------------------------------
@@ -36,13 +47,26 @@ endif()
 # ---------------------------------------------------------------
 message(STATUS "Detecting libraries...")
 
-find_package(USB REQUIRED)
-import_library(usb ${USB_LIBRARIES} ${USB_INCLUDE_DIRS})
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 find_package(Threads REQUIRED)
 
-find_package(Iconv)
+find_package(USB)
+if(USB_FOUND)
+	import_library(usb ${USB_LIBRARIES} ${USB_INCLUDE_DIRS})
+endif()
+
+find_package(HIDAPI)
+if(HIDAPI_FOUND)
+	import_library(hidapi ${HIDAPI_LIBRARIES} ${HIDAPI_INCLUDE_DIRS})
+endif()
+
+find_package(BFD)
+if(BFD_FOUND)
+	add_definitions(-DENABLE_TARGET_PROGRAMMING=1)
+else()
+	add_definitions(-DENABLE_TARGET_PROGRAMMING=0)
+endif()
 
 # system introspection
 # ---------------------------------------------------------------
@@ -83,17 +107,20 @@ check_all_functions(
 	vfork
 	vprintf)
 	
+check_all_types(
+	socklen_t)
+	
 # config header
 # ---------------------------------------------------------------
-set(HAVE_LIBUSB TRUE)
 
 set(PACKAGE_BUGREPORT "jsmith@crackofdawn.onmicrosoft.com")
 set(PACKAGE_STRING "${PROJECT_NAME} ${PROJECT_VERSION}")
 set(PACKAGE_TARNAME avarice)
 set(PACKAGE_URL http://avarice.sourceforge.net/)
 
+set(HAVE_LIBUSB ${LIBUSB_FOUND})
 set(HAVE_LIBUSB_2_0 ${LIBUSB_IS_BSD_USB20})
-	
+set(HAVE_LIBHIDAPI ${LIBHIDAPI_FOUND})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/autoconf.in.cmake ${CMAKE_CURRENT_BINARY_DIR}/src/autoconf.h)
 	
@@ -109,3 +136,24 @@ message(STATUS "****************************************************************
 message(STATUS "Configuration successful!")
 message(STATUS "Build type:                      ${CMAKE_BUILD_TYPE}")
 message(STATUS "AVaRICE will be installed to:    ${CMAKE_INSTALL_PREFIX}")
+
+# libusb
+if(USB_FOUND)
+message(STATUS "libusb 0.1:                      ENABLED      [${USB_LIBRARY}]")
+else()
+message(STATUS "libusb 0.1:                      NOT FOUND    [JTAGICE mkII and AVRDRAGON USB support can't be built]")
+endif()
+
+# libhidapi
+if(HIDAPI_FOUND)
+message(STATUS "libhidapi:                       ENABLED      [${HIDAPI_LIBRARY}]")
+else()
+message(STATUS "libhidapi:                       NOT FOUND    [JTAGICE3, Atmel ICE, and EDBG support can't be built]")
+endif()
+
+# libbfd
+if(BFD_FOUND)
+message(STATUS "libbfd:                          ENABLED      [${BFD_LIBRARY}]")
+else()
+message(STATUS "libbfd:                          NOT FOUND    [Target programming support can't be built]")
+endif()

@@ -30,7 +30,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <termios.h>
 #include <fcntl.h>
 #include <string.h>
 
@@ -38,6 +37,10 @@
 #include "jtag.h"
 #include "jtag2.h"
 #include "remote.h"
+
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
+#endif
 
 unsigned long jtag2::getProgramCounter(void)
 {
