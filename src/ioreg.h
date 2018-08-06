@@ -27,9 +27,9 @@
 #define IO_REG_RSE    0x01    // IO register has read side effect
 
 typedef struct {
-    const char* name;
-    const unsigned int reg_addr;
-    const unsigned char flags;
+		const char* name;
+		const unsigned int reg_addr;
+		const unsigned char flags;
 } gdb_io_reg_def_type;
 
 extern gdb_io_reg_def_type atmega16_io_registers[];

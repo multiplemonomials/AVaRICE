@@ -31,35 +31,35 @@ bool debugMode = false;
 
 void vdebugOut(const char *fmt, va_list args)
 {
-    if (debugMode)
-    {
-        (void)vfprintf(stderr, fmt, args);
-    }
+		if (debugMode)
+		{
+				(void)vfprintf(stderr, fmt, args);
+		}
 }
 
 void debugOut(const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt);
-    vdebugOut(fmt, args);
-    va_end(args);
+		va_list args;
+		va_start(args, fmt);
+		vdebugOut(fmt, args);
+		va_end(args);
 }
 
 void vstatusOut(const char *fmt, va_list args)
 {
-    vprintf(fmt, args);
+		vprintf(fmt, args);
 }
 
 void statusOut(const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt);
-    vstatusOut(fmt, args);
-    va_end(args);
+		va_list args;
+		va_start(args, fmt);
+		vstatusOut(fmt, args);
+		va_end(args);
 }
 
 void statusFlush()
 {
-    fflush(stdout);
+		fflush(stdout);
 }
 

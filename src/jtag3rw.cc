@@ -38,110 +38,110 @@
 
 
 /** Return the memory space code for the memory space indicated by the
-    high-order bits of 'addr'. Also clear these high order bits in 'addr'
+		high-order bits of 'addr'. Also clear these high order bits in 'addr'
 **/
 uchar jtag3::memorySpace(unsigned long &addr)
 {
-    int mask;
+		int mask;
 
-    // We can't just mask the bits off, because 0x10000->0x1ffff are
-    // valid code addresses
-    if (addr & DATA_SPACE_ADDR_OFFSET)
-    {
+		// We can't just mask the bits off, because 0x10000->0x1ffff are
+		// valid code addresses
+		if (addr & DATA_SPACE_ADDR_OFFSET)
+		{
 	mask = addr & ADDR_SPACE_MASK;
 	addr &= ~ADDR_SPACE_MASK;
-    }
-    else
+		}
+		else
 	mask = 0;
 
-    switch (mask)
-    {
-    case EEPROM_SPACE_ADDR_OFFSET:
+		switch (mask)
+		{
+		case EEPROM_SPACE_ADDR_OFFSET:
 	if (proto != PROTO_DW && programmingEnabled)
-	    return MTYPE_EEPROM_PAGE;
+			return MTYPE_EEPROM_PAGE;
 	else
-	    return MTYPE_EEPROM;
-    case FUSE_SPACE_ADDR_OFFSET:
+			return MTYPE_EEPROM;
+		case FUSE_SPACE_ADDR_OFFSET:
 	return MTYPE_FUSE_BITS;
-    case LOCK_SPACE_ADDR_OFFSET:
+		case LOCK_SPACE_ADDR_OFFSET:
 	return MTYPE_LOCK_BITS;
-    case SIG_SPACE_ADDR_OFFSET:
+		case SIG_SPACE_ADDR_OFFSET:
 	return MTYPE_SIGN_JTAG;
-      // ... return MTYPE_OSCCAL_BYTE;
-      // ... return MTYPE_CAN;
-    case BREAKPOINT_SPACE_ADDR_OFFSET:
+			// ... return MTYPE_OSCCAL_BYTE;
+			// ... return MTYPE_CAN;
+		case BREAKPOINT_SPACE_ADDR_OFFSET:
 	return MTYPE_EVENT;
-    case REGISTER_SPACE_ADDR_OFFSET:
+		case REGISTER_SPACE_ADDR_OFFSET:
 	return MTYPE_XMEGA_REG;
-    case DATA_SPACE_ADDR_OFFSET:
+		case DATA_SPACE_ADDR_OFFSET:
 	return MTYPE_SRAM;
-    default:
+		default:
 	if (is_xmega)
-	    return MTYPE_XMEGA_APP_FLASH;
+			return MTYPE_XMEGA_APP_FLASH;
 	else if (proto == PROTO_DW || programmingEnabled)
-	    return MTYPE_FLASH_PAGE;
+			return MTYPE_FLASH_PAGE;
 	else
-	    return MTYPE_SPM;
-    }
+			return MTYPE_SPM;
+		}
 }
 
 uchar *jtag3::jtagRead(unsigned long addr, unsigned int numBytes)
 {
-    uchar *response;
-    int responsesize;
+		uchar *response;
+		int responsesize;
 
-    if (numBytes == 0)
-    {
+		if (numBytes == 0)
+		{
 	response = new uchar[1];
 	response[0] = '\0';
 	return response;
-    }
+		}
 
-    debugOut("jtagRead ");
-    uchar whichSpace = memorySpace(addr);
-    bool needProgmode = whichSpace >= MTYPE_FLASH_PAGE &&
-        whichSpace < MTYPE_XMEGA_REG;
-    unsigned int pageSize = 0;
-    unsigned int offset = 0;
-    bool wasProgmode = programmingEnabled;
-    if (needProgmode && !programmingEnabled)
-       enableProgramming();
+		debugOut("jtagRead ");
+		uchar whichSpace = memorySpace(addr);
+		bool needProgmode = whichSpace >= MTYPE_FLASH_PAGE &&
+				whichSpace < MTYPE_XMEGA_REG;
+		unsigned int pageSize = 0;
+		unsigned int offset = 0;
+		bool wasProgmode = programmingEnabled;
+		if (needProgmode && !programmingEnabled)
+			 enableProgramming();
 
-    unsigned char *cachePtr = NULL;
-    unsigned int *cacheBaseAddr = NULL;
+		unsigned char *cachePtr = NULL;
+		unsigned int *cacheBaseAddr = NULL;
 
-    switch (whichSpace)
-    {
+		switch (whichSpace)
+		{
 	// Pad to even byte count for flash memory.
 	// Even MTYPE_SPM appears to cause a RSP_FAILED
 	// otherwise.
-    case MTYPE_SPM:
-        offset = addr & 1;
-        addr &= ~1;
+		case MTYPE_SPM:
+				offset = addr & 1;
+				addr &= ~1;
 	numBytes = (numBytes + 1) & ~1;
 	break;
 
-    case MTYPE_FLASH_PAGE:
+		case MTYPE_FLASH_PAGE:
 	pageSize = deviceDef->flash_page_size;
 	cachePtr = flashCache;
 	cacheBaseAddr = &flashCachePageAddr;
 	break;
 
-    case MTYPE_EEPROM_PAGE:
+		case MTYPE_EEPROM_PAGE:
 	pageSize = deviceDef->eeprom_page_size;
 	cachePtr = eepromCache;
 	cacheBaseAddr = &eepromCachePageAddr;
 	break;
-    }
+		}
 
-    uchar cmd[12];
+		uchar cmd[12];
 
-    cmd[0] = SCOPE_AVR;
-    cmd[1] = CMD3_READ_MEMORY;
-    cmd[2] = 0;
-    cmd[3] = whichSpace;
+		cmd[0] = SCOPE_AVR;
+		cmd[1] = CMD3_READ_MEMORY;
+		cmd[2] = 0;
+		cmd[3] = whichSpace;
 
-    if (pageSize > 0) {
+		if (pageSize > 0) {
 	u32_to_b4(cmd + 8, pageSize);
 	response = new uchar[numBytes];
 
@@ -151,170 +151,170 @@ uchar *jtag3::jtagRead(unsigned long addr, unsigned int numBytes)
 	unsigned int targetOffset = 0;
 
 	if (addr + numBytes >= pageAddr + pageSize)
-	    // Chunk would cross a page boundary, reduce it
-	    // appropriately.
-	    chunksize -= (addr + numBytes - (pageAddr + pageSize));
+			// Chunk would cross a page boundary, reduce it
+			// appropriately.
+			chunksize -= (addr + numBytes - (pageAddr + pageSize));
 	offset = addr - pageAddr;
 
 	while (numBytes > 0)
 	{
-	    uchar *resp;
+			uchar *resp;
 
-	    if (pageAddr == *cacheBaseAddr)
-	    {
+			if (pageAddr == *cacheBaseAddr)
+			{
 		// quickly fetch from page cache
 		memcpy(response + targetOffset,
-		       cachePtr + offset,
-		       chunksize);
-	    }
-	    else
-	    {
+					 cachePtr + offset,
+					 chunksize);
+			}
+			else
+			{
 		// read from device, cache result, and copy over our part
 		u32_to_b4(cmd + 4, pageAddr);
-                try
-                {
-                    doJtagCommand(cmd, sizeof cmd, "read memory", resp, responsesize);
-                }
-                catch (jtag_exception& e)
-                {
-                    fprintf(stderr, "Failed to read target memory space: %s\n",
-                            e.what());
-                    delete [] response;
-                    throw;
-                }
+						    try
+						    {
+						        doJtagCommand(cmd, sizeof cmd, "read memory", resp, responsesize);
+						    }
+						    catch (jtag_exception& e)
+						    {
+						        fprintf(stderr, "Failed to read target memory space: %s\n",
+						                e.what());
+						        delete [] response;
+						        throw;
+						    }
 		memcpy(cachePtr, resp + 3, pageSize);
 		*cacheBaseAddr = pageAddr;
 		memcpy(response + targetOffset,
-		       cachePtr + offset,
-		       chunksize);
+					 cachePtr + offset,
+					 chunksize);
 		delete [] resp;
-	    }
+			}
 
-	    numBytes -= chunksize;
-	    targetOffset += chunksize;
+			numBytes -= chunksize;
+			targetOffset += chunksize;
 
-	    chunksize = numBytes > pageSize? pageSize: numBytes;
-	    pageAddr += pageSize;
+			chunksize = numBytes > pageSize? pageSize: numBytes;
+			pageAddr += pageSize;
 	}
-    } else {
+		} else {
 	u32_to_b4(cmd + 8, numBytes);
 	u32_to_b4(cmd + 4, addr);
 
-        int cnt = 0;
-      again:
+				int cnt = 0;
+			again:
 	try
-        {
-            doJtagCommand(cmd, sizeof cmd, "read memory", response, responsesize);
-        }
-        catch (jtag_io_exception& e)
-        {
-            cnt++;
-            if (e.get_response() == RSP3_FAIL_WRONG_MODE &&
-                cnt < 2)
-            {
-                interruptProgram();
-                goto again;
-            }
-            fprintf(stderr, "Failed to read target memory space: %s\n",
-                    e.what());
-            throw;
-        }
-        catch (jtag_exception& e)
-        {
-            fprintf(stderr, "Failed to read target memory space: %s\n",
-                    e.what());
-            throw;
-        }
+				{
+						doJtagCommand(cmd, sizeof cmd, "read memory", response, responsesize);
+				}
+				catch (jtag_io_exception& e)
+				{
+						cnt++;
+						if (e.get_response() == RSP3_FAIL_WRONG_MODE &&
+						    cnt < 2)
+						{
+						    interruptProgram();
+						    goto again;
+						}
+						fprintf(stderr, "Failed to read target memory space: %s\n",
+						        e.what());
+						throw;
+				}
+				catch (jtag_exception& e)
+				{
+						fprintf(stderr, "Failed to read target memory space: %s\n",
+						        e.what());
+						throw;
+				}
 	if (offset > 0)
-	    memmove(response, response + 3 + offset, responsesize - 1 - offset);
+			memmove(response, response + 3 + offset, responsesize - 1 - offset);
 	else
-	    memmove(response, response + 3, responsesize - 1);
-    }
+			memmove(response, response + 3, responsesize - 1);
+		}
 
-    if (needProgmode && !wasProgmode)
-       disableProgramming();
+		if (needProgmode && !wasProgmode)
+			 disableProgramming();
 
-    return response;
+		return response;
 }
 
 void jtag3::jtagWrite(unsigned long addr, unsigned int numBytes, uchar buffer[])
 {
-    if (numBytes == 0)
+		if (numBytes == 0)
 	return;
 
-    debugOut("jtagWrite ");
-    uchar whichSpace = memorySpace(addr);
+		debugOut("jtagWrite ");
+		uchar whichSpace = memorySpace(addr);
 
-    // Hack to detect the start of a GDB "load" command.  Iff this
-    // address is tied to flash ROM, and it is address 0, and the size
-    // is larger than 4 bytes, assume it's the first block of a "load"
-    // command.  If so, chip erase the device, and switch over to
-    // programming mode to speed up things (drastically).
+		// Hack to detect the start of a GDB "load" command.  Iff this
+		// address is tied to flash ROM, and it is address 0, and the size
+		// is larger than 4 bytes, assume it's the first block of a "load"
+		// command.  If so, chip erase the device, and switch over to
+		// programming mode to speed up things (drastically).
 
-    if (proto != PROTO_DW &&
+		if (proto != PROTO_DW &&
 	whichSpace == MTYPE_SPM &&
 	addr == 0 &&
 	numBytes > 4)
-    {
+		{
 	debugOut("Detected GDB \"load\" command, erasing flash.\n");
 	//whichSpace = MTYPE_FLASH_PAGE; // this will turn on progmode
 	eraseProgramMemory();
-    }
+		}
 
-    bool needProgmode = whichSpace >= MTYPE_FLASH_PAGE &&
-        whichSpace < MTYPE_XMEGA_REG;
-    unsigned int pageSize = 0;
-    bool wasProgmode = programmingEnabled;
-    if (needProgmode && !programmingEnabled)
-       enableProgramming();
+		bool needProgmode = whichSpace >= MTYPE_FLASH_PAGE &&
+				whichSpace < MTYPE_XMEGA_REG;
+		unsigned int pageSize = 0;
+		bool wasProgmode = programmingEnabled;
+		if (needProgmode && !programmingEnabled)
+			 enableProgramming();
 
-    switch (whichSpace)
-    {
-    case MTYPE_FLASH_PAGE:
+		switch (whichSpace)
+		{
+		case MTYPE_FLASH_PAGE:
 	pageSize = deviceDef->flash_page_size;
 	break;
 
-    case MTYPE_EEPROM_PAGE:
+		case MTYPE_EEPROM_PAGE:
 	pageSize = deviceDef->eeprom_page_size;
 	break;
-    }
-    if (pageSize > 0) {
+		}
+		if (pageSize > 0) {
 	unsigned int mask = pageSize - 1;
 	addr &= ~mask;
 	if (numBytes != pageSize)
-	    throw ("jtagWrite(): numByte does not match page size");
-    }
-    uchar cmd[14 + numBytes];
+			throw ("jtagWrite(): numByte does not match page size");
+		}
+		uchar cmd[14 + numBytes];
 
-    cmd[0] = SCOPE_AVR;
-    cmd[1] = CMD3_WRITE_MEMORY;
-    cmd[2] = 0;
-    cmd[3] = whichSpace;
-    if (pageSize) {
+		cmd[0] = SCOPE_AVR;
+		cmd[1] = CMD3_WRITE_MEMORY;
+		cmd[2] = 0;
+		cmd[3] = whichSpace;
+		if (pageSize) {
 	u32_to_b4(cmd + 8, pageSize);
 	u32_to_b4(cmd + 4, addr);
-    } else {
+		} else {
 	u32_to_b4(cmd + 8, numBytes);
 	u32_to_b4(cmd + 4, addr);
-    }
-    cmd[12] = 0;
-    memcpy(cmd + 13, buffer, numBytes);
+		}
+		cmd[12] = 0;
+		memcpy(cmd + 13, buffer, numBytes);
 
-    uchar *response;
-    int responsesize;
+		uchar *response;
+		int responsesize;
 
-    try
-    {
-        doJtagCommand(cmd, 14 + numBytes, "write memory", response, responsesize);
-    }
-    catch (jtag_exception& e)
-    {
-        fprintf(stderr, "Failed to write target memory space: %s\n",
-                e.what());
-        throw;
-    }
-    delete [] response;
+		try
+		{
+				doJtagCommand(cmd, 14 + numBytes, "write memory", response, responsesize);
+		}
+		catch (jtag_exception& e)
+		{
+				fprintf(stderr, "Failed to write target memory space: %s\n",
+						    e.what());
+				throw;
+		}
+		delete [] response;
 
-    if (needProgmode && !wasProgmode)
-       disableProgramming();
+		if (needProgmode && !wasProgmode)
+			 disableProgramming();
 }

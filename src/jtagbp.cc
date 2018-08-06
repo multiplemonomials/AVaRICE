@@ -38,16 +38,16 @@
 
 bool jtag1::codeBreakpointAt(unsigned int address)
 {
-  address /= 2;
-  for (int i = 0; i < numBreakpointsCode; i++)
-    if (bpCode[i].address == address)
-      return true;
-  return false;
+	address /= 2;
+	for (int i = 0; i < numBreakpointsCode; i++)
+		if (bpCode[i].address == address)
+			return true;
+	return false;
 }
 
 void jtag1::deleteAllBreakpoints(void)
 {
-    numBreakpointsData = numBreakpointsCode = 0;
+		numBreakpointsData = numBreakpointsCode = 0;
 }
 
 PRAGMA_DIAG_PUSH
@@ -55,22 +55,22 @@ PRAGMA_DIAG_IGNORED("-Wunused-parameter")
 
 bool jtag1::addBreakpoint(unsigned int address, bpType type, unsigned int length)
 {
-    breakpoint *bp;
+		breakpoint *bp;
 
-    debugOut("BP ADD type: %d  addr: 0x%x ", type, address);
+		debugOut("BP ADD type: %d  addr: 0x%x ", type, address);
 
-    // Respect overall breakpoint limit
-    if (numBreakpointsCode + numBreakpointsData == MAX_BREAKPOINTS)
-      return false;
+		// Respect overall breakpoint limit
+		if (numBreakpointsCode + numBreakpointsData == MAX_BREAKPOINTS)
+			return false;
 
-    // There's a spare breakpoint, is there one of the appropriate type 
-    // available?
-    if (type == CODE)
-    {
+		// There's a spare breakpoint, is there one of the appropriate type 
+		// available?
+		if (type == CODE)
+		{
 	if (numBreakpointsCode == MAX_BREAKPOINTS_CODE)
 	{
-	    debugOut("FAILED\n");
-	    return false;
+			debugOut("FAILED\n");
+			return false;
 	}
 
 	bp = &bpCode[numBreakpointsCode++];
@@ -78,104 +78,104 @@ bool jtag1::addBreakpoint(unsigned int address, bpType type, unsigned int length
 	// The JTAG box sees program memory as 16-bit wide locations. GDB
 	// sees bytes. As such, halve the breakpoint address.
 	address /= 2;
-    }
-    else // data breakpoint
-    {
+		}
+		else // data breakpoint
+		{
 	if (numBreakpointsData == MAX_BREAKPOINTS_DATA)
 	{
-	    debugOut("FAILED\n");
-	    return false;
+			debugOut("FAILED\n");
+			return false;
 	}
 
 	bp = &bpData[numBreakpointsData++];
-    }
+		}
 
-    bp->address = address;
-    bp->type = type;
+		bp->address = address;
+		bp->type = type;
 
-    debugOut(" ADDED\n");
-    return true;
+		debugOut(" ADDED\n");
+		return true;
 }
 
 
 bool jtag1::deleteBreakpoint(unsigned int address, bpType type, unsigned int length)
 {
-    breakpoint *bp;
-    int *numBp;
+		breakpoint *bp;
+		int *numBp;
 
-    debugOut("BP DEL type: %d  addr: 0x%x ", type, address);
+		debugOut("BP DEL type: %d  addr: 0x%x ", type, address);
 
-    if (type == CODE)
-    {
+		if (type == CODE)
+		{
 	bp = bpCode;
 	numBp = &numBreakpointsCode;
 	// The JTAG box sees program memory as 16-bit wide locations. GDB
 	// sees bytes. As such, halve the breakpoint address.
 	address /= 2;
-    }
-    else // data
-    {
+		}
+		else // data
+		{
 	bp = bpData;
 	numBp = &numBreakpointsData;
-    }
+		}
 
-    // Find and squash the removed breakpoint
-    for (int i = 0; i < *numBp; i++)
-    {
+		// Find and squash the removed breakpoint
+		for (int i = 0; i < *numBp; i++)
+		{
 	if (bp[i].type == type && bp[i].address == address)
 	{
-	    debugOut("REMOVED %d\n", i);
-	    (*numBp)--;
-	    memmove(&bp[i], &bp[i + 1], (*numBp - i) * sizeof(breakpoint));
-	    return true;
+			debugOut("REMOVED %d\n", i);
+			(*numBp)--;
+			memmove(&bp[i], &bp[i + 1], (*numBp - i) * sizeof(breakpoint));
+			return true;
 	}
-    }
-    debugOut("FAILED\n");
-    return false;
+		}
+		debugOut("FAILED\n");
+		return false;
 }
 PRAGMA_DIAG_POP
 
 void jtag1::updateBreakpoints(void)
 {
-    unsigned char bpMode = 0x00;
-    int bpC = 0, bpD = 0;
-    breakpoint *bp;
+		unsigned char bpMode = 0x00;
+		int bpC = 0, bpD = 0;
+		breakpoint *bp;
 
-    debugOut("updateBreakpoints\n");
+		debugOut("updateBreakpoints\n");
 
-    // BP 0 (aka breakpoint Z0).
-    // Send breakpoint array down to the target.
-    // BP 1 is activated by writing a 1 to BP address space.
-    // note: BP1 only supports code space breakpoints.
-    if (bpC < numBreakpointsCode)
-    {
+		// BP 0 (aka breakpoint Z0).
+		// Send breakpoint array down to the target.
+		// BP 1 is activated by writing a 1 to BP address space.
+		// note: BP1 only supports code space breakpoints.
+		if (bpC < numBreakpointsCode)
+		{
 	uchar zero = 0;
 	jtagWrite(BREAKPOINT_SPACE_ADDR_OFFSET + bpCode[bpC++].address, 1, &zero);
-    }
+		}
 
-    // BP 1 (aka breakpoint Z1).
-    // Send breakpoint array down to the target.
-    // BP 1 is activated by writing a 1 to BP address space.
-    // note: BP1 only supports code space breakpoints.
-    if (bpC < numBreakpointsCode)
-    {
+		// BP 1 (aka breakpoint Z1).
+		// Send breakpoint array down to the target.
+		// BP 1 is activated by writing a 1 to BP address space.
+		// note: BP1 only supports code space breakpoints.
+		if (bpC < numBreakpointsCode)
+		{
 	uchar one = 1;
 	jtagWrite(BREAKPOINT_SPACE_ADDR_OFFSET + bpCode[bpC++].address, 1, &one);
-    }
+		}
 
-    // Set X & Y breakpoints. Code is cut&pasty, but it's only two copies and
-    // has tons of parameters.
+		// Set X & Y breakpoints. Code is cut&pasty, but it's only two copies and
+		// has tons of parameters.
 
-    // Find next breakpoint
-    bp = NULL;
-    if (bpC < numBreakpointsCode)
+		// Find next breakpoint
+		bp = NULL;
+		if (bpC < numBreakpointsCode)
 	bp = &bpCode[bpC++];
-    else if (bpD < numBreakpointsData)
+		else if (bpD < numBreakpointsData)
 	bp = &bpData[bpD++];
 
-    // BP 2 (aka breakpoint X).
-    if (bp)
-    {
+		// BP 2 (aka breakpoint X).
+		if (bp)
+		{
 	setJtagParameter(JTAG_P_BP_X_HIGH, bp->address >> 8);
 	setJtagParameter(JTAG_P_BP_X_LOW, bp->address & 0xff);
 
@@ -183,58 +183,58 @@ void jtag1::updateBreakpoints(void)
 	switch (bp->type)
 	{
 	case READ_DATA:
-	    bpMode |= 0x00;
-	    break;
+			bpMode |= 0x00;
+			break;
 	case WRITE_DATA:
-	    bpMode |= 0x04;
-	    break;
+			bpMode |= 0x04;
+			break;
 	case ACCESS_DATA:
-	    bpMode |= 0x08;
-	    break;
+			bpMode |= 0x08;
+			break;
 	case CODE:
-	    bpMode |= 0x0c;
-	    break;
-        case NONE:
-        default:
-            break;
+			bpMode |= 0x0c;
+			break;
+				case NONE:
+				default:
+						break;
 	}
 
 
 	// Find next breakpoint
 	bp = NULL;
 	if (bpC < numBreakpointsCode)
-	    bp = &bpCode[bpC++];
+			bp = &bpCode[bpC++];
 	else if (bpD < numBreakpointsData)
-	    bp = &bpData[bpD++];
+			bp = &bpData[bpD++];
 
 	// BP 3 (aka breakpoint Y).
 	if (bp)
 	{
-	    setJtagParameter(JTAG_P_BP_Y_HIGH, bp->address >> 8);
-	    setJtagParameter(JTAG_P_BP_Y_LOW, bp->address & 0xff);
+			setJtagParameter(JTAG_P_BP_Y_HIGH, bp->address >> 8);
+			setJtagParameter(JTAG_P_BP_Y_LOW, bp->address & 0xff);
 
-	    // Only used when BP2 is on, so this is correcy
-	    bpMode |= 0x10; // turn on this breakpoint
-	    switch (bp->type)
-	    {
-	    case READ_DATA:
+			// Only used when BP2 is on, so this is correcy
+			bpMode |= 0x10; // turn on this breakpoint
+			switch (bp->type)
+			{
+			case READ_DATA:
 		bpMode |= 0x00;
 		break;
-	    case WRITE_DATA:
+			case WRITE_DATA:
 		bpMode |= 0x01;
 		break;
-	    case ACCESS_DATA:
+			case ACCESS_DATA:
 		bpMode |= 0x02;
 		break;
-	    case CODE:
+			case CODE:
 		bpMode |= 0x03;
 		break;
-	    case NONE:
-	    default:
+			case NONE:
+			default:
 		break;
-	    }
+			}
 	}
 
 	setJtagParameter(JTAG_P_BP_MODE, bpMode);
-    }
+		}
 }

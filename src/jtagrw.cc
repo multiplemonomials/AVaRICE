@@ -40,66 +40,66 @@
 
 
 /** Return the memory space code for the memory space indicated by the
-    high-order bits of '*addr'. Also clear these high order bits in '*addr'
+		high-order bits of '*addr'. Also clear these high order bits in '*addr'
 **/
 static uchar memorySpace(unsigned long *addr)
 {
-    int mask;
+		int mask;
 
-    // We can't just mask the bits off, because 0x10000->0x1ffff are
-    // valid code addresses
-    if (*addr & DATA_SPACE_ADDR_OFFSET)
-    {
+		// We can't just mask the bits off, because 0x10000->0x1ffff are
+		// valid code addresses
+		if (*addr & DATA_SPACE_ADDR_OFFSET)
+		{
 	mask = *addr & ADDR_SPACE_MASK;
 	*addr &= ~ADDR_SPACE_MASK;
-    }
-    else
+		}
+		else
 	mask = 0;
 
-    switch (mask)
-    {
-    case  EEPROM_SPACE_ADDR_OFFSET: return ADDR_EEPROM_SPACE;
-    case FUSE_SPACE_ADDR_OFFSET: return ADDR_FUSE_SPACE;
-    case LOCK_SPACE_ADDR_OFFSET: return ADDR_LOCK_SPACE;
-    case SIG_SPACE_ADDR_OFFSET: return ADDR_SIG_SPACE;
-    case BREAKPOINT_SPACE_ADDR_OFFSET: return ADDR_BREAKPOINT_SPACE;
-    case DATA_SPACE_ADDR_OFFSET: return ADDR_DATA_SPACE;
-    default: return 0; // program memory, handled specially
-    }
+		switch (mask)
+		{
+		case  EEPROM_SPACE_ADDR_OFFSET: return ADDR_EEPROM_SPACE;
+		case FUSE_SPACE_ADDR_OFFSET: return ADDR_FUSE_SPACE;
+		case LOCK_SPACE_ADDR_OFFSET: return ADDR_LOCK_SPACE;
+		case SIG_SPACE_ADDR_OFFSET: return ADDR_SIG_SPACE;
+		case BREAKPOINT_SPACE_ADDR_OFFSET: return ADDR_BREAKPOINT_SPACE;
+		case DATA_SPACE_ADDR_OFFSET: return ADDR_DATA_SPACE;
+		default: return 0; // program memory, handled specially
+		}
 }
 
 static void swapBytes(uchar *buffer, unsigned int count)
 {
-    assert(!(count & 1));
-    for (unsigned int i = 0; i < count; i += 2)
-    {
+		assert(!(count & 1));
+		for (unsigned int i = 0; i < count; i += 2)
+		{
 	uchar temp = buffer[i];
 	buffer[i] = buffer[i + 1];
 	buffer[i + 1] = temp;
-    }
+		}
 }
 
 
 uchar *jtag1::jtagRead(unsigned long addr, unsigned int numBytes)
 {
-    uchar *response;
-    int whichSpace = 0;
-    uchar command[] = { 'R', 0, 0, 0, 0, 0, JTAG_EOM }; 
+		uchar *response;
+		int whichSpace = 0;
+		uchar command[] = { 'R', 0, 0, 0, 0, 0, JTAG_EOM }; 
 
-    if (numBytes == 0)
-    {
+		if (numBytes == 0)
+		{
 	response = new uchar[1];
 	response[0] = '\0';
 	return response;
-    }
+		}
 
-    debugOut("jtagRead ");
-    whichSpace = memorySpace(&addr);
-    if (whichSpace)
-    {
+		debugOut("jtagRead ");
+		whichSpace = memorySpace(&addr);
+		if (whichSpace)
+		{
 	command[1] = whichSpace;
 	if (numBytes > 256)
-	    return NULL;
+			return NULL;
 	command[2] = numBytes - 1;
 	encodeAddress(&command[3], addr);
 
@@ -111,27 +111,27 @@ uchar *jtag1::jtagRead(unsigned long addr, unsigned int numBytes)
 	response = doJtagCommand(command, sizeof command, numBytes + 2);
 
 	if (response[numBytes + 1] == JTAG_R_OK)
-	    return response;
+			return response;
 
 	delete [] response;
 
 	throw jtag_exception();
-    }
-    else
-    {
+		}
+		else
+		{
 
 	// Reading program memory
 	whichSpace = programmingEnabled ?
-	    ADDR_PROG_SPACE_PROG_ENABLED : ADDR_PROG_SPACE_PROG_DISABLED;
+			ADDR_PROG_SPACE_PROG_ENABLED : ADDR_PROG_SPACE_PROG_DISABLED;
 
 	// Program space is 16 bits wide, with word reads
 	int numLocations;
 	if (addr & 1)
-	    numLocations = (numBytes + 2) / 2;
+			numLocations = (numBytes + 2) / 2;
 	else
-	    numLocations = (numBytes + 1) / 2;
+			numLocations = (numBytes + 1) / 2;
 	if (numLocations > 256)
-	    throw jtag_exception();
+			throw jtag_exception();
 
 	command[1] = whichSpace;
 	command[2] = numLocations - 1;
@@ -141,112 +141,112 @@ uchar *jtag1::jtagRead(unsigned long addr, unsigned int numBytes)
 
 	if (response[numLocations * 2 + 1] == JTAG_R_OK)
 	{
-	    // Programming mode and regular mode are byte-swapped...
-	    if (!programmingEnabled)
+			// Programming mode and regular mode are byte-swapped...
+			if (!programmingEnabled)
 		swapBytes(response, numLocations * 2);
 
-	    if (addr & 1)
+			if (addr & 1)
 		// we read one byte early. move stuff down.
 		memmove(response, response + 1, numBytes);
 
-	    return response;
+			return response;
 	}
 
 	delete [] response;
 
 	throw jtag_exception();
-    }
+		}
 }
 
 void jtag1::jtagWrite(unsigned long addr, unsigned int numBytes, uchar buffer[])
 {
-    uchar *response;
-    int whichSpace = 0;
-    unsigned int numLocations;
-    uchar command[] = { 'W', 0, 0, 0, 0, 0, JTAG_EOM }; 
+		uchar *response;
+		int whichSpace = 0;
+		unsigned int numLocations;
+		uchar command[] = { 'W', 0, 0, 0, 0, 0, JTAG_EOM }; 
 
-    if (numBytes == 0)
+		if (numBytes == 0)
 	return;
 
-    debugOut("jtagWrite ");
-    whichSpace = memorySpace(&addr);
+		debugOut("jtagWrite ");
+		whichSpace = memorySpace(&addr);
 
-    if (whichSpace)
+		if (whichSpace)
 	numLocations = numBytes;
-    else
-    {
+		else
+		{
 	// Writing program memory, which is word (16-bit) addressed
 
 	// We don't handle odd lengths or start addresses
 	if ((addr & 1))
-        {
-	    throw jtag_exception("Odd program memory write operation");
-        }
+				{
+			throw jtag_exception("Odd program memory write operation");
+				}
 
-        // Odd length: Write one more byte.
-        if ((numBytes & 1))
-        {
-            debugOut ("\nOdd pgm wr length\n");
-            numBytes+=1;
-        }
+				// Odd length: Write one more byte.
+				if ((numBytes & 1))
+				{
+						debugOut ("\nOdd pgm wr length\n");
+						numBytes+=1;
+				}
 
 	addr /= 2;
 	numLocations = numBytes / 2;
 
 	if (programmingEnabled)
-	    whichSpace = ADDR_PROG_SPACE_PROG_ENABLED;
+			whichSpace = ADDR_PROG_SPACE_PROG_ENABLED;
 	else
 	{
-	    whichSpace = ADDR_PROG_SPACE_PROG_DISABLED;
-	    swapBytes(buffer, numBytes);
+			whichSpace = ADDR_PROG_SPACE_PROG_DISABLED;
+			swapBytes(buffer, numBytes);
 	}
-    }
+		}
 
-    // This is the maximum write size
-    if (numLocations > 256)
+		// This is the maximum write size
+		if (numLocations > 256)
 	throw jtag_exception("Attempt to write more than 256 bytes");
 
-    // Writing is a two part process
+		// Writing is a two part process
 
-    // Part 1: send the address
-    command[1] = whichSpace;
-    command[2] = numLocations - 1;
-    encodeAddress(&command[3], addr);
+		// Part 1: send the address
+		command[1] = whichSpace;
+		command[2] = numLocations - 1;
+		encodeAddress(&command[3], addr);
 
-    response = doJtagCommand(command, sizeof command, 0);
-    if (!response)
+		response = doJtagCommand(command, sizeof command, 0);
+		if (!response)
 	throw jtag_exception();
-    delete [] response;
+		delete [] response;
 
-    // Part 2: send the data in the following form:
-    // h [data byte]...[data byte] __
+		// Part 2: send the data in the following form:
+		// h [data byte]...[data byte] __
 
-    // Before we begin, a little note on the endianness.
-    // Firstly, data space is 8 bits wide and the only data written by
-    // this routine will be byte-wide, so endianness does not matter.
+		// Before we begin, a little note on the endianness.
+		// Firstly, data space is 8 bits wide and the only data written by
+		// this routine will be byte-wide, so endianness does not matter.
 
-    // For code space, the data is 16 bit wide. The data appears to be
-    // formatted big endian in the processor memory. The JTAG box
-    // expects little endian data. The object files output from GCC are
-    // already word-wise little endian.
+		// For code space, the data is 16 bit wide. The data appears to be
+		// formatted big endian in the processor memory. The JTAG box
+		// expects little endian data. The object files output from GCC are
+		// already word-wise little endian.
 
-    // As this data is already formatted, and currently the only writes
-    // to program space are for code download, it is simpler at this
-    // stage to simply pass the data straight through. This may need to
-    // change in the future.
-    uchar *txBuffer = new uchar[numBytes + 3]; // allow for header and trailer
-    txBuffer[0] = 'h';
+		// As this data is already formatted, and currently the only writes
+		// to program space are for code download, it is simpler at this
+		// stage to simply pass the data straight through. This may need to
+		// change in the future.
+		uchar *txBuffer = new uchar[numBytes + 3]; // allow for header and trailer
+		txBuffer[0] = 'h';
 
-    memcpy(&txBuffer[1], buffer, numBytes);
+		memcpy(&txBuffer[1], buffer, numBytes);
 
-    txBuffer[numBytes + 1] = ' ';
-    txBuffer[numBytes + 2] = ' ';
+		txBuffer[numBytes + 1] = ' ';
+		txBuffer[numBytes + 2] = ' ';
 
-    response = doJtagCommand(txBuffer, numBytes + 3, 1);
-    delete [] txBuffer;
+		response = doJtagCommand(txBuffer, numBytes + 3, 1);
+		delete [] txBuffer;
 
-    if (!response)
+		if (!response)
 	throw jtag_exception();
-    delete [] response;
+		delete [] response;
 }
 

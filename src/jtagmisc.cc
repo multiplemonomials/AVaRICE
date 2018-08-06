@@ -38,35 +38,35 @@
 
 void jtag1::setJtagParameter(uchar item, uchar newValue)
 {
-    uchar *response = NULL;
-    uchar command[] = {'B', 0, 0, JTAG_EOM };
+		uchar *response = NULL;
+		uchar command[] = {'B', 0, 0, JTAG_EOM };
 
-    command[1] = item;
-    command[2] = newValue;
+		command[1] = item;
+		command[2] = newValue;
 
-    response = doJtagCommand(command, sizeof(command), 1);
-    if (response[0] != JTAG_R_OK)
-        throw jtag_exception("Unknown parameter");
+		response = doJtagCommand(command, sizeof(command), 1);
+		if (response[0] != JTAG_R_OK)
+				throw jtag_exception("Unknown parameter");
 
-    delete [] response;
+		delete [] response;
 }
 
 uchar jtag1::getJtagParameter(uchar item)
 {
-    uchar *response = NULL;
-    uchar command[] = {'q', 0, JTAG_EOM };
-    unsigned char result = 0;
+		uchar *response = NULL;
+		uchar command[] = {'q', 0, JTAG_EOM };
+		unsigned char result = 0;
 
-    command[1] = item;
-    response = doJtagCommand(command, sizeof(command), 2);
-    if (response[1] != JTAG_R_OK)
-        throw jtag_exception("Unknown parameter");
+		command[1] = item;
+		response = doJtagCommand(command, sizeof(command), 2);
+		if (response[1] != JTAG_R_OK)
+				throw jtag_exception("Unknown parameter");
 
-    result = response[0];
+		result = response[0];
 
-    delete [] response;
+		delete [] response;
 
-    return result;
+		return result;
 }
 
 

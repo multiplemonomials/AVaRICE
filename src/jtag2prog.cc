@@ -53,50 +53,50 @@
 
 static void initImage(BFDimage *image)
 {
-    unsigned int i;
-    image->last_address = 0;
-    image->first_address = 0;
-    image->first_address_ok = false;
-    image->has_data = false;
-    for (i=0;i<MAX_IMAGE_SIZE;i++)
-    {
-        image->image[i].val  = 0x00;
-        image->image[i].used = false;
-    }
+		unsigned int i;
+		image->last_address = 0;
+		image->first_address = 0;
+		image->first_address_ok = false;
+		image->has_data = false;
+		for (i=0;i<MAX_IMAGE_SIZE;i++)
+		{
+				image->image[i].val  = 0x00;
+				image->image[i].used = false;
+		}
 }
 
 // Check if file format is supported.
 // return nonzero on errors.
 static int check_file_format(bfd *file)
 {
-    char **matching;
-    int err = 1;
+		char **matching;
+		int err = 1;
 
-    // Check if archive, not plain file.
-    if (bfd_check_format(file, bfd_archive) == true)
-    {
-        fprintf(stderr, "Input file is archive\n");
-    }
+		// Check if archive, not plain file.
+		if (bfd_check_format(file, bfd_archive) == true)
+		{
+				fprintf(stderr, "Input file is archive\n");
+		}
 
-    else if (bfd_check_format_matches (file, bfd_object, &matching))
-        err = 0;
+		else if (bfd_check_format_matches (file, bfd_object, &matching))
+				err = 0;
 
-    else if (bfd_get_error () == bfd_error_file_ambiguously_recognized)
-    {
-        fprintf(stderr, "File format ambiguous: %s\n",
-                bfd_errmsg(bfd_get_error()));
-    }
+		else if (bfd_get_error () == bfd_error_file_ambiguously_recognized)
+		{
+				fprintf(stderr, "File format ambiguous: %s\n",
+						    bfd_errmsg(bfd_get_error()));
+		}
 
-    else if (bfd_get_error () != bfd_error_file_not_recognized)
-    {
-        fprintf(stderr, "File format not supported: %s\n",
-                bfd_errmsg(bfd_get_error()));
-    }
+		else if (bfd_get_error () != bfd_error_file_not_recognized)
+		{
+				fprintf(stderr, "File format not supported: %s\n",
+						    bfd_errmsg(bfd_get_error()));
+		}
 
-    else if (bfd_check_format_matches (file, bfd_core, &matching))
-        err = 0;
+		else if (bfd_check_format_matches (file, bfd_core, &matching))
+				err = 0;
 
-    return err;
+		return err;
 }
 
 
@@ -114,108 +114,108 @@ static int check_file_format(bfd *file)
 //
 static unsigned int get_section_addr(asection *section, BFDmemoryType memtype)
 {
-    BFDmemoryType sectmemtype;
+		BFDmemoryType sectmemtype;
 
-    if ((section->flags & SEC_HAS_CONTENTS) &&
-        ((section->flags & SEC_ALLOC) || (section->flags & SEC_LOAD)))
-    {
-        if (section->lma < DATA_SPACE_ADDR_OFFSET) // < 0x80...
-            sectmemtype = MEM_FLASH;
-        else if (section->lma < EEPROM_SPACE_ADDR_OFFSET) // < 0x81...
-            sectmemtype = MEM_RAM;
-        else if (section->lma < FUSE_SPACE_ADDR_OFFSET) // < 0x82...
-            sectmemtype = MEM_EEPROM;
-        else			// e.g. .fuses
-	    return 0xffffff;
+		if ((section->flags & SEC_HAS_CONTENTS) &&
+				((section->flags & SEC_ALLOC) || (section->flags & SEC_LOAD)))
+		{
+				if (section->lma < DATA_SPACE_ADDR_OFFSET) // < 0x80...
+						sectmemtype = MEM_FLASH;
+				else if (section->lma < EEPROM_SPACE_ADDR_OFFSET) // < 0x81...
+						sectmemtype = MEM_RAM;
+				else if (section->lma < FUSE_SPACE_ADDR_OFFSET) // < 0x82...
+						sectmemtype = MEM_EEPROM;
+				else			// e.g. .fuses
+			return 0xffffff;
 
 	if (memtype == sectmemtype) {
-            if (sectmemtype == MEM_FLASH) {
-                /* Don't mask the lma or you will not be able to handle more
-                   than 64K of flash. */
-                return (section->lma);
-            }
-            return (section->lma &~ ADDR_SPACE_MASK);
-        }
-        else
-            return 0xffffff;
-    }
-    else
-        return 0xffffff;
+						if (sectmemtype == MEM_FLASH) {
+						    /* Don't mask the lma or you will not be able to handle more
+						       than 64K of flash. */
+						    return (section->lma);
+						}
+						return (section->lma &~ ADDR_SPACE_MASK);
+				}
+				else
+						return 0xffffff;
+		}
+		else
+				return 0xffffff;
 }
 
 
 
 // Add section of memtype BFDmemoryType to image.
 static void jtag_create_image(bfd *file, asection *section,
-                              BFDimage *image,
-                              BFDmemoryType memtype)
+						                  BFDimage *image,
+						                  BFDmemoryType memtype)
 {
-    const char *name;
-    unsigned int addr;
-    unsigned int size;
-    static uchar buf[MAX_IMAGE_SIZE];
-    unsigned int i;
+		const char *name;
+		unsigned int addr;
+		unsigned int size;
+		static uchar buf[MAX_IMAGE_SIZE];
+		unsigned int i;
 
-    // If section is empty (although unexpected) return
-    if (! section)
-        return;
+		// If section is empty (although unexpected) return
+		if (! section)
+				return;
 
-    // Get information about section
-    name = bfd_get_section_name(file, section);
-    size = bfd_get_section_size(section);
+		// Get information about section
+		name = bfd_get_section_name(file, section);
+		size = bfd_get_section_size(section);
 
-    if ((addr = get_section_addr(section, memtype)) != 0xffffff)
-    {
-        debugOut("Getting section contents, addr=0x%lx size=0x%lx\n",
-                 addr, size);
+		if ((addr = get_section_addr(section, memtype)) != 0xffffff)
+		{
+				debugOut("Getting section contents, addr=0x%lx size=0x%lx\n",
+						     addr, size);
 
-        // Read entire section into buffer, at correct byte address.
-        bfd_get_section_contents(file, section, buf, 0, size);
+				// Read entire section into buffer, at correct byte address.
+				bfd_get_section_contents(file, section, buf, 0, size);
 
-        // Copy section into memory struct. Mark as used.
-        for (i=0; i<size; i++)
-        {
-            unsigned int c = i+addr;
-            image->image[c].val = buf[i];
-            image->image[c].used = true;
-        }
+				// Copy section into memory struct. Mark as used.
+				for (i=0; i<size; i++)
+				{
+						unsigned int c = i+addr;
+						image->image[c].val = buf[i];
+						image->image[c].used = true;
+				}
 
-        // Remember last address in image
-        if (addr+size > image->last_address)
-            image->last_address = addr+size;
+				// Remember last address in image
+				if (addr+size > image->last_address)
+						image->last_address = addr+size;
 
-        // Remember first address in image
-        if ((! image->first_address_ok) || (addr < image->first_address))
-        {
-            image->first_address = addr;
-            image->first_address_ok = true;
-        }
-        debugOut("%s Image create: Adding %s at addr 0x%lx size %d (0x%lx)\n",
-                 BFDmemoryTypeString[memtype], name, addr, size, size);
+				// Remember first address in image
+				if ((! image->first_address_ok) || (addr < image->first_address))
+				{
+						image->first_address = addr;
+						image->first_address_ok = true;
+				}
+				debugOut("%s Image create: Adding %s at addr 0x%lx size %d (0x%lx)\n",
+						     BFDmemoryTypeString[memtype], name, addr, size, size);
 
-        // Indicate image has data
-        image->has_data = true;
-    }
+				// Indicate image has data
+				image->has_data = true;
+		}
 }
 #endif	// ENABLE_TARGET_PROGRAMMING
 
 void jtag2::enableProgramming(void)
 {
-    if (proto != PROTO_DW)
-    {
+		if (proto != PROTO_DW)
+		{
 	programmingEnabled = true;
 	doSimpleJtagCommand(CMND_ENTER_PROGMODE);
-    }
+		}
 }
 
 
 void jtag2::disableProgramming(void)
 {
-    if (proto != PROTO_DW)
-    {
+		if (proto != PROTO_DW)
+		{
 	programmingEnabled = false;
 	doSimpleJtagCommand(CMND_LEAVE_PROGMODE);
-    }
+		}
 }
 
 
@@ -223,172 +223,172 @@ void jtag2::disableProgramming(void)
 // (unless the save-eeprom fuse is set).
 void jtag2::eraseProgramMemory(void)
 {
-    if (proto == PROTO_DW)
-        // debugWIRE auto-erases when programming
-        return;
+		if (proto == PROTO_DW)
+				// debugWIRE auto-erases when programming
+				return;
 
-    if (is_xmega)
-    {
-        uchar *response;
-        int respSize;
-        uchar command[6] = { CMND_XMEGA_ERASE };
+		if (is_xmega)
+		{
+				uchar *response;
+				int respSize;
+				uchar command[6] = { CMND_XMEGA_ERASE };
 
-        // ERASE_MODE (erase chip)
-        command[1] = 0x00;
+				// ERASE_MODE (erase chip)
+				command[1] = 0x00;
 
-        // ADDRESS
-        command[2] = 0x00;
-        command[3] = 0x00;
-        command[4] = 0x00;
-        command[5] = 0x00;
+				// ADDRESS
+				command[2] = 0x00;
+				command[3] = 0x00;
+				command[4] = 0x00;
+				command[5] = 0x00;
 
 	try
 	{
-	    doJtagCommand(command, sizeof(command),
-			  response, respSize);
+			doJtagCommand(command, sizeof(command),
+				response, respSize);
 	}
 	catch (jtag_exception& e)
 	{
-	    fprintf(stderr, "Failed to erase Xmega program memory: %s\n",
-		    e.what());
-	    throw;
+			fprintf(stderr, "Failed to erase Xmega program memory: %s\n",
+				e.what());
+			throw;
 	}
-        delete [] response;
-    }
-    else
-    {
-        doSimpleJtagCommand(CMND_CHIP_ERASE);
-    }
+				delete [] response;
+		}
+		else
+		{
+				doSimpleJtagCommand(CMND_CHIP_ERASE);
+		}
 }
 
 void jtag2::eraseProgramPage(unsigned long address)
 {
-    uchar *response;
-    int respSize;
-    uchar command[5] = { CMND_ERASEPAGE_SPM };
+		uchar *response;
+		int respSize;
+		uchar command[5] = { CMND_ERASEPAGE_SPM };
 
-    command[1] = (address & 0xff000000) >> 24;
-    command[2] = (address & 0xff0000) >> 16;
-    command[3] = (address & 0xff00) >> 8;
-    command[4] = address;
+		command[1] = (address & 0xff000000) >> 24;
+		command[2] = (address & 0xff0000) >> 16;
+		command[3] = (address & 0xff00) >> 8;
+		command[4] = address;
 
-    try
-    {
-        doJtagCommand(command, sizeof(command),
-                      response, respSize);
-    }
-    catch (jtag_exception& e)
-    {
-        fprintf(stderr, "Page erase failed: %s\n",
-                e.what());
-        throw;
-    }
+		try
+		{
+				doJtagCommand(command, sizeof(command),
+						          response, respSize);
+		}
+		catch (jtag_exception& e)
+		{
+				fprintf(stderr, "Page erase failed: %s\n",
+						    e.what());
+				throw;
+		}
 
-    delete [] response;
+		delete [] response;
 }
 
 
 void jtag2::downloadToTarget(const char* filename, bool program, bool verify)
 {
 #if ENABLE_TARGET_PROGRAMMING
-    // Basically, we just open the file and copy blocks over to the JTAG
-    // box.
-    struct stat ifstat;
-    const char *target = NULL;
-    const char *default_target = "binary";
-    unsigned int page_size;
-    bool done = 0;
-    bfd *file;
-    asection *p;
+		// Basically, we just open the file and copy blocks over to the JTAG
+		// box.
+		struct stat ifstat;
+		const char *target = NULL;
+		const char *default_target = "binary";
+		unsigned int page_size;
+		bool done = 0;
+		bfd *file;
+		asection *p;
 
-    static BFDimage flashimg, eepromimg;
+		static BFDimage flashimg, eepromimg;
 
-    initImage(&flashimg);
-    initImage(&eepromimg);
+		initImage(&flashimg);
+		initImage(&eepromimg);
 
-    flashimg.name = BFDmemoryTypeString[MEM_FLASH];
-    eepromimg.name = BFDmemoryTypeString[MEM_EEPROM];
+		flashimg.name = BFDmemoryTypeString[MEM_FLASH];
+		eepromimg.name = BFDmemoryTypeString[MEM_EEPROM];
 
-    if (stat(filename, &ifstat) < 0)
-        throw jtag_exception("Can't stat() image file");
+		if (stat(filename, &ifstat) < 0)
+				throw jtag_exception("Can't stat() image file");
 
-    // Open the input file.
-    bfd_init();
+		// Open the input file.
+		bfd_init();
 
-    // Auto detect file format by a loop iterated at most two times.
-    //   1. Auto-detect file format.
-    //   2. If auto-detect failed, assume binary and iterate once more over
-    //      loop.
-    while (! done)
-    {
-        file = bfd_openr(filename, target);
-        if (! file)
-        {
-            fprintf( stderr, "Could not open input file %s:%s\n", filename,
-                     bfd_errmsg(bfd_get_error()) );
-            exit(-1);
-        }
+		// Auto detect file format by a loop iterated at most two times.
+		//   1. Auto-detect file format.
+		//   2. If auto-detect failed, assume binary and iterate once more over
+		//      loop.
+		while (! done)
+		{
+				file = bfd_openr(filename, target);
+				if (! file)
+				{
+						fprintf( stderr, "Could not open input file %s:%s\n", filename,
+						         bfd_errmsg(bfd_get_error()) );
+						exit(-1);
+				}
 
-        // Check if file format is supported. If not, go for binary mode.
-        else if (check_file_format(file))
-        {
-            // File format detection failed. Assuming binary file
-            // BFD section flags are CONTENTS,ALLOC,LOAD,DATA
-            // We must force CODE in stead of DATA
-            fprintf(stderr, "Warning: File format unknown, assuming "
-                    "binary.\n");
-            target = default_target;
-        }
+				// Check if file format is supported. If not, go for binary mode.
+				else if (check_file_format(file))
+				{
+						// File format detection failed. Assuming binary file
+						// BFD section flags are CONTENTS,ALLOC,LOAD,DATA
+						// We must force CODE in stead of DATA
+						fprintf(stderr, "Warning: File format unknown, assuming "
+						        "binary.\n");
+						target = default_target;
+				}
 
-        else
-            done = 1;
-    }
+				else
+						done = 1;
+		}
 
 
-    // Configure for JTAG download/programming
+		// Configure for JTAG download/programming
 
-    // Set the flash page and eeprom page sizes (These are device dependent)
-    page_size = get_page_size(MEM_FLASH);
+		// Set the flash page and eeprom page sizes (These are device dependent)
+		page_size = get_page_size(MEM_FLASH);
 
-    debugOut("Flash page size: 0x%0x\nEEPROM page size: 0x%0x\n",
-             page_size, get_page_size(MEM_EEPROM));
+		debugOut("Flash page size: 0x%0x\nEEPROM page size: 0x%0x\n",
+						 page_size, get_page_size(MEM_EEPROM));
 
 #if notneeded // already addressed by setting the device descriptor
-    setJtagParameter(JTAG_P_FLASH_PAGESIZE_LOW, page_size & 0xff);
-    setJtagParameter(JTAG_P_FLASH_PAGESIZE_HIGH, page_size >> 8);
+		setJtagParameter(JTAG_P_FLASH_PAGESIZE_LOW, page_size & 0xff);
+		setJtagParameter(JTAG_P_FLASH_PAGESIZE_HIGH, page_size >> 8);
 
-    setJtagParameter(JTAG_P_EEPROM_PAGESIZE,
-                     get_page_size(MEM_EEPROM));
+		setJtagParameter(JTAG_P_EEPROM_PAGESIZE,
+						         get_page_size(MEM_EEPROM));
 #endif
 
-    // Create RAM image by reading all sections in file
-    p = file->sections;
-    while (p)
-    {
-        jtag_create_image(file, p, &flashimg, MEM_FLASH);
-        jtag_create_image(file, p, &eepromimg, MEM_EEPROM);
-        p = p->next;
-    }
+		// Create RAM image by reading all sections in file
+		p = file->sections;
+		while (p)
+		{
+				jtag_create_image(file, p, &flashimg, MEM_FLASH);
+				jtag_create_image(file, p, &eepromimg, MEM_EEPROM);
+				p = p->next;
+		}
 
-    enableProgramming();
+		enableProgramming();
 
-    // Write the complete FLASH/EEPROM images to the device.
-    if (flashimg.has_data)
-        jtag_flash_image(&flashimg, MEM_FLASH, program, verify);
-    if (eepromimg.has_data)
-        jtag_flash_image(&eepromimg, MEM_EEPROM, program, verify);
+		// Write the complete FLASH/EEPROM images to the device.
+		if (flashimg.has_data)
+				jtag_flash_image(&flashimg, MEM_FLASH, program, verify);
+		if (eepromimg.has_data)
+				jtag_flash_image(&eepromimg, MEM_EEPROM, program, verify);
 
-    disableProgramming();
+		disableProgramming();
 
-    (void)(bfd_close(file));
+		(void)(bfd_close(file));
 
-    statusOut("\nDownload complete.\n");
+		statusOut("\nDownload complete.\n");
 #else  // !ENABLE_TARGET_PROGRAMMING
 	(void)filename;
 	(void)program;
 	(void)verify;
 
-    statusOut("\nDownload not done.\n");
-    throw jtag_exception("AVaRICE was not configured for target programming");
+		statusOut("\nDownload not done.\n");
+		throw jtag_exception("AVaRICE was not configured for target programming");
 #endif	// ENABLE_TARGET_PROGRAMMING
 }

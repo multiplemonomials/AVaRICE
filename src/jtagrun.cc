@@ -40,16 +40,16 @@
 
 unsigned long jtag1::getProgramCounter(void)
 {
-    uchar *response = NULL;
-    uchar command[] = {'2', JTAG_EOM };
-    unsigned long result = 0;
+		uchar *response = NULL;
+		uchar command[] = {'2', JTAG_EOM };
+		unsigned long result = 0;
 
-    response = doJtagCommand(command, sizeof(command), 4);
+		response = doJtagCommand(command, sizeof(command), 4);
 
-    if (response[3] != JTAG_R_OK)
+		if (response[3] != JTAG_R_OK)
 	result = PC_INVALID;
-    else
-    {
+		else
+		{
 	result = decodeAddress(response);
 
 	result--; // returned value is PC + 1 as far as GDB is concerned
@@ -57,73 +57,73 @@ unsigned long jtag1::getProgramCounter(void)
 	// The JTAG box sees program memory as 16-bit wide locations. GDB
 	// sees bytes. As such, double the PC value.
 	result *= 2;
-    }
+		}
 
-    delete [] response;
-    return result;
+		delete [] response;
+		return result;
 }
 
 void jtag1::setProgramCounter(unsigned long pc)
 {
-    uchar *response = NULL;
-    uchar command[] = {'3', 0, 0, 0, JTAG_EOM };
+		uchar *response = NULL;
+		uchar command[] = {'3', 0, 0, 0, JTAG_EOM };
 
-    // See decoding in getProgramCounter
-    encodeAddress(&command[1], pc / 2 + 1);
+		// See decoding in getProgramCounter
+		encodeAddress(&command[1], pc / 2 + 1);
 
-    response = doJtagCommand(command, sizeof(command), 1);
+		response = doJtagCommand(command, sizeof(command), 1);
 
-    if (response[0] != JTAG_R_OK)
-        throw jtag_exception();
+		if (response[0] != JTAG_R_OK)
+				throw jtag_exception();
 
-    delete [] response;
+		delete [] response;
 }
 
 void jtag1::resetProgram(bool possible_nSRST)
 {
-  if (possible_nSRST && apply_nSRST) {
-    setJtagParameter(JTAG_P_EXTERNAL_RESET, 0x01);
-  }
-  doSimpleJtagCommand('x', 1);
-  if (possible_nSRST && apply_nSRST) {
-    setJtagParameter(JTAG_P_EXTERNAL_RESET, 0x00);
-  }
+	if (possible_nSRST && apply_nSRST) {
+		setJtagParameter(JTAG_P_EXTERNAL_RESET, 0x01);
+	}
+	doSimpleJtagCommand('x', 1);
+	if (possible_nSRST && apply_nSRST) {
+		setJtagParameter(JTAG_P_EXTERNAL_RESET, 0x00);
+	}
 }
 
 void jtag1::interruptProgram(void)
 {
-    // Just ignore the returned PC. It appears to be wrong if the most
-    // recent instruction was a branch.
-    doSimpleJtagCommand('F', 4);
+		// Just ignore the returned PC. It appears to be wrong if the most
+		// recent instruction was a branch.
+		doSimpleJtagCommand('F', 4);
 }
 
 void jtag1::resumeProgram(void)
 {
-    doSimpleJtagCommand('G', 0);
+		doSimpleJtagCommand('G', 0);
 }
 
 void jtag1::jtagSingleStep(void)
 {
-    doSimpleJtagCommand('1', 1);
+		doSimpleJtagCommand('1', 1);
 }
 
 void jtag1::parseEvents(const char *)
 {
-    // current no event name parsing in mkI
+		// current no event name parsing in mkI
 }
 
 bool jtag1::jtagContinue(void)
 {
-    updateBreakpoints();        // download new bp configuration
+		updateBreakpoints();        // download new bp configuration
 
-    if (!doSimpleJtagCommand('G', 0))
-    {
+		if (!doSimpleJtagCommand('G', 0))
+		{
 	gdbOut("Failed to continue\n");
 	return true;
-    }
+		}
 
-    for (;;)
-    {
+		for (;;)
+		{
 	int maxfd;
 	fd_set readfds;
 	bool breakpoint = false, gdbInterrupt = false;
@@ -141,20 +141,20 @@ bool jtag1::jtagContinue(void)
 
 	int numfds = select(maxfd + 1, &readfds, 0, 0, 0);
 	if (numfds < 0)
-        {
-            fprintf(stderr, "GDB/JTAG ICE communications failure");
-            throw jtag_exception();
-        }
+				{
+						fprintf(stderr, "GDB/JTAG ICE communications failure");
+						throw jtag_exception();
+				}
 
 	if (FD_ISSET(gdbFileDescriptor, &readfds))
 	{
-	    int c = getDebugChar();
-	    if (c == 3) // interrupt
-	    {
+			int c = getDebugChar();
+			if (c == 3) // interrupt
+			{
 		debugOut("interrupted by GDB\n");
 		gdbInterrupt = true;
-	    }
-	    else
+			}
+			else
 		debugOut("Unexpected GDB input `%02x'\n", c);
 	}
 
@@ -174,47 +174,47 @@ bool jtag1::jtagContinue(void)
 	// for something...)
 	uchar response;
 
-        // This read shouldn't need to be a timeout_read(), but some cygwin
-        // systems don't seem to honor the O_NONBLOCK flag on file
-        // descriptors.
+				// This read shouldn't need to be a timeout_read(), but some cygwin
+				// systems don't seem to honor the O_NONBLOCK flag on file
+				// descriptors.
 	while (timeout_read(&response, 1, 1) == 1)
 	{
-	    uchar buf[2];
-	    int count;
+			uchar buf[2];
+			int count;
 
-	    debugOut("JTAG box sent %c", response);
-	    switch (response)
-	    {
-	    case JTAG_R_BREAK:
+			debugOut("JTAG box sent %c", response);
+			switch (response)
+			{
+			case JTAG_R_BREAK:
 		count = timeout_read(buf, 2, JTAG_RESPONSE_TIMEOUT);
 		if (count < 2)
-		    throw jtag_exception();
+				throw jtag_exception();
 		breakpoint = true;
 		debugOut(": Break Status Register = 0x%02x%02x\n",
 			 buf[0], buf[1]);
 		break;
-	    case JTAG_R_INFO: case JTAG_R_SLEEP:
+			case JTAG_R_INFO: case JTAG_R_SLEEP:
 		// we could do something here, esp. for info
 		count = timeout_read(buf, 2, JTAG_RESPONSE_TIMEOUT);
 		if (count < 2)
-		    throw jtag_exception();
+				throw jtag_exception();
 		debugOut(": 0x%02, 0x%02\n", buf[0], buf[1]);
 		break;
-	    case JTAG_R_POWER:
+			case JTAG_R_POWER:
 		// apparently no args?
-                debugOut("\n");
+						    debugOut("\n");
 		break;
-	    default:
+			default:
 		debugOut(": Unknown response\n");
 		break; 
-	    }
+			}
 	}
 
 	// We give priority to user interrupts
 	if (gdbInterrupt)
-	    return false;
+			return false;
 	if (breakpoint)
-	    return true;
-    }
+			return true;
+		}
 }
 
