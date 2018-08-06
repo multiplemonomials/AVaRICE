@@ -30,6 +30,9 @@
 /* Define to 1 if you have the `usb' library (-lusb). */
 #cmakedefine HAVE_LIBUSB 1
 
+/* Define to 1 if libusb is bsd's libusb20 */
+#cmakedefine HAVE_LIBUSB_2_0 1
+
 /* Define to 1 if you have the `memmove' function. */
 #cmakedefine HAVE_MEMMOVE 1
 
@@ -124,7 +127,7 @@
 #define PACKAGE_URL ${PACKAGE_URL}
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION ${PROJECT_VERSION}
+#define PACKAGE_VERSION "${PROJECT_VERSION}"
 
 /* Version number of package */
 #define VERSION ${PROJECT_VERSION}

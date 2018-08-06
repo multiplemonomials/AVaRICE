@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-project(AVaRICE VERSION 2.14 LANGUAGES CXX)
+project(AVaRICE VERSION 2.14 LANGUAGES C CXX)
 cmake_policy(VERSION 3.1)
 
 message(STATUS "**************************************************************************")
@@ -14,6 +14,9 @@ include(LibraryUtils)
 
 include(CheckIncludeFileCXX)
 include(CheckFunctionExists)
+include(CMakePushCheckState)
+include(CheckCXXSourceCompiles)
+include(FindPackageHandleStandardArgs)
 
 # setup compiler flags
 # ---------------------------------------------------------------
@@ -26,15 +29,18 @@ set(CMAKE_CXX_EXTENSIONS FALSE)
 option(ENABLE_WARNINGS "Enable compiler warnings" TRUE)
 
 if(ENABLE_WARNINGS)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-missing-field-initializers")
 endif()
 
 # find dependency libraries
 # ---------------------------------------------------------------
 message(STATUS "Detecting libraries...")
 
-find_package(USB-1.0 REQUIRED)
-import_library(usb-1.0 ${USB-1.0_LIBRARIES} ${USB-1.0_INCLUDE_DIRS})
+find_package(USB REQUIRED)
+import_library(usb ${USB_LIBRARIES} ${USB_INCLUDE_DIRS})
+
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+find_package(Threads REQUIRED)
 
 find_package(Iconv)
 
@@ -86,6 +92,9 @@ set(PACKAGE_STRING "${PROJECT_NAME} ${PROJECT_VERSION}")
 set(PACKAGE_TARNAME avarice)
 set(PACKAGE_URL http://avarice.sourceforge.net/)
 
+set(HAVE_LIBUSB_2_0 ${LIBUSB_IS_BSD_USB20})
+	
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/autoconf.in.cmake ${CMAKE_CURRENT_BINARY_DIR}/src/autoconf.h)
 	
 # subdirs
@@ -98,4 +107,5 @@ add_subdirectory(src)
 # ---------------------------------------------------------------
 message(STATUS "**************************************************************************")
 message(STATUS "Configuration successful!")
-message(STATUS "AVaRICE will be installed to ${CMAKE_INSTALL_PREFIX}")
+message(STATUS "Build type:                      ${CMAKE_BUILD_TYPE}")
+message(STATUS "AVaRICE will be installed to:    ${CMAKE_INSTALL_PREFIX}")

@@ -42,7 +42,7 @@ set(AVARICE_SOURCES
 	gnu_getopt1.c)
 
 add_executable(avarice ${AVARICE_SOURCES})
-target_link_libraries(avarice usb-1.0)
+target_link_libraries(avarice usb Threads::Threads)
 target_include_directories(avarice PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 install(TARGETS avarice DESTINATION bin)
